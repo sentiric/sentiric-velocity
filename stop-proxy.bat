@@ -23,7 +23,7 @@ if %errorlevel% equ 0 (
 
 echo.
 echo 🔥 Windows Güvenlik Duvarı kuralı kaldırılıyor...
-powershell -Command "Remove-NetFirewallRule -DisplayName 'VeloCache Proxy' -ErrorAction SilentlyContinue"
+powershell -Command "Remove-NetFirewallRule -DisplayName 'VeloCache Proxy' -ErrorAction SilentlyContinue" >nul
 echo ✅ Güvenlik duvarı kuralı kaldırıldı.
 
 echo.

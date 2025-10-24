@@ -42,29 +42,33 @@ VeloCache, hız, güvenlik ve verimlilik odaklı modern bir HTTP/HTTPS cache pro
 
 ---
 
-## 🐧 WSL Entegrasyonu (Otomatik Kurulum)
+## 🐧 WSL Entegrasyonu
 
-VeloCache, Windows'un yanı sıra WSL (Windows Subsystem for Linux) içindeki `apt`, `wget`, `curl` gibi komutların trafiğini de cache'leyebilir.
+VeloCache, WSL (Windows Subsystem for Linux) içindeki `apt`, `wget`, `curl` gibi komutların trafiğini de cache'leyebilir. Entegrasyon için aşağıdaki **tek seferlik kurulumu** yapmanız yeterlidir.
 
-`start-proxy.bat` betiği, projenizin klasöründe `wsl-proxy.sh` ve `wsl-proxy-off.sh` adında iki betik oluşturur. Bu betikleri WSL terminalinizde kolayca kullanmak için aşağıdaki **tek seferlik kurulumu** yapmanız yeterlidir:
+### Tek Seferlik WSL Kurulumu
 
-1.  Proje klasörünüzde bir WSL terminali açın.
-2.  Aşağıdaki komutu çalıştırarak `~/.bashrc` (veya kullandığınız shell'e göre `~/.zshrc`) dosyasına gerekli kısayolları ekleyin.
-
+1.  Proje klasörünüzde bir WSL terminali açın. (`/mnt/c/sentiric/sentiric-velocity` gibi)
+2.  `dos2unix` aracının yüklü olduğundan emin olun. Değilse, yükleyin:
     ```bash
-    # Proje klasörünün WSL yolunu al
-    VELOCACHE_PATH=$(wslpath -a "$(pwd)")
-
-    # ~/.bashrc dosyasına kısayolları ekle
-    echo '' >> ~/.bashrc
-    echo '# VeloCache Proxy Kısayolları' >> ~/.bashrc
-    echo "alias proxy-on='source \"${VELOCACHE_PATH}/wsl-proxy.sh\"'" >> ~/.bashrc
-    echo "alias proxy-off='source \"${VELOCACHE_PATH}/wsl-proxy-off.sh\"'" >> ~/.bashrc
-    echo '' >> ~/.bashrc
+    sudo apt update && sudo apt install dos2unix
     ```
-3.  Terminalinizi yeniden başlatın veya `source ~/.bashrc` komutunu çalıştırın.
+3.  Proje ile gelen `.sh` betiklerini çalıştırılabilir yapın ve kurulumu başlatın:
+    ```bash
+    dos2unix *.sh
+    chmod +x *.sh
+    ./setup-wsl.sh
+    ```
+4.  Kurulum betiği `~/.bashrc` veya `~/.zshrc` dosyanıza gerekli kısayolları ekleyecektir. Değişikliklerin aktif olması için terminalinizi yeniden başlatın veya şu komutu çalıştırın:
+    ```bash
+    source ~/.bashrc  # veya 'source ~/.zshrc'
+    ```
 
-Artık WSL terminalinizde proxy'yi anında etkinleştirmek ve devre dışı bırakmak için şu komutları kullanabilirsiniz:
+### WSL'de Proxy Kullanımı
+
+Kurulumu tamamladıktan sonra, WSL terminalinizde proxy'yi anında yönetmek için şu basit komutları kullanabilirsiniz:
 
 -   **Proxy'yi Etkinleştir:** `proxy-on`
 -   **Proxy'yi Devre Dışı Bırak:** `proxy-off`
+
+**Önemli:** Bu komutların çalışması için Windows tarafında `start-proxy.bat` ile VeloCache sunucusunun çalışıyor olması gerekir.
