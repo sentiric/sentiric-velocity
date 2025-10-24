@@ -35,7 +35,7 @@ pub async fn start_server(cache_manager: Arc<CacheManager>) -> Result<()> {
     }
 }
 
-async fn serve_connection(mut stream: TcpStream, cache: Arc<CacheManager>) -> Result<()> {
+async fn serve_connection(stream: TcpStream, cache: Arc<CacheManager>) -> Result<()> {
     let mut buffer = [0; 4096];
     let n = stream.peek(&mut buffer).await?;
 
