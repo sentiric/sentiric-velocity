@@ -1,10 +1,62 @@
 use crate::cache::CacheManager;
 use crate::config;
 use anyhow::Result;
-use hyper::{header, Body, Client, Method, Request, Response, StatusCode};
-use hyper_tls::HttpsConnector;
+use async_trait::async_trait;
+use hyper::client::connect::dns::Name;
+use hyper::{header, Body, HeaderMap, Method, Request, Response, StatusCode};
+use lazy_static::lazy_static;
+use reqwest::dns::Resolve;
+use reqwest::Client;
+use std::error::Error as StdError;
+use std::future::Future;
+use std::net::SocketAddr;
+use std::pin::Pin;
 use std::sync::Arc;
 use tracing::{info, warn};
+use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+use trust_dns_resolver::TokioAsyncResolver;
+
+struct TrustDnsResolver(TokioAsyncResolver);
+
+impl TrustDnsResolver {
+    fn new() -> Self {
+        let resolver =
+            TokioAsyncResolver::tokio(ResolverConfig::cloudflare(), ResolverOpts::default())
+                .unwrap();
+        Self(resolver)
+    }
+}
+
+#[async_trait]
+impl Resolve for TrustDnsResolver {
+    fn resolve(
+        &self,
+        name: Name,
+    ) -> Pin<Box<dyn Future<Output = Result<Box<dyn Iterator<Item = SocketAddr> + Send + 'static>, Box<dyn StdError + Send + Sync>>> + Send>>
+    {
+        let resolver = self.0.clone();
+        Box::pin(async move {
+            let addrs = resolver.lookup_ip(name.as_str()).await?;
+            let mut sock_addrs: Vec<SocketAddr> =
+                addrs.into_iter().map(|addr| (addr, 0).into()).collect();
+            sock_addrs.dedup();
+            let iter: Box<dyn Iterator<Item = SocketAddr> + Send + 'static> = Box::new(sock_addrs.into_iter());
+            Ok(iter)
+        })
+    }
+}
+
+
+lazy_static! {
+    static ref HTTP_CLIENT: Client = {
+        let resolver = TrustDnsResolver::new();
+        reqwest::Client::builder()
+            .dns_resolver(Arc::new(resolver))
+            .no_proxy()
+            .build()
+            .expect("Failed to build reqwest client")
+    };
+}
 
 pub async fn proxy_handler(
     req: Request<Body>,
@@ -19,9 +71,7 @@ pub async fn proxy_handler(
     if method == Method::GET {
         if let Some(cached_entry) = cache.get(&cache_key).await {
             let mut builder = Response::builder().status(StatusCode::OK);
-            if let Ok(val) = header::HeaderValue::from_str(&cached_entry.content_type) {
-                builder = builder.header(header::CONTENT_TYPE, val);
-            }
+            *builder.headers_mut().unwrap() = cached_entry.headers.clone();
             return Ok(builder.body(Body::from(cached_entry.data)).unwrap());
         }
     }
@@ -40,7 +90,7 @@ pub async fn proxy_handler(
 }
 
 async fn forward_request(
-    mut req: Request<Body>,
+    req: Request<Body>,
     cache: Arc<CacheManager>,
     cache_key: &str,
 ) -> Result<Response<Body>> {
@@ -48,33 +98,44 @@ async fn forward_request(
     let method = req.method().clone();
     let uri_string = req.uri().to_string();
 
-    req.headers_mut().insert(
-        header::USER_AGENT,
-        header::HeaderValue::from_str(&config.proxy.user_agent)?,
-    );
+    let mut headers = req.headers().clone();
+    headers.remove(header::CONNECTION);
+    // DÜZELTME: header::KEEP_ALIVE sabiti yerine string kullanıldı.
+    headers.remove("keep-alive");
+    headers.remove(header::PROXY_AUTHENTICATE);
+    headers.remove(header::PROXY_AUTHORIZATION);
+    headers.remove(header::TE);
+    headers.remove(header::TRAILER);
+    headers.remove(header::TRANSFER_ENCODING);
+    headers.remove(header::UPGRADE);
+    headers.remove("Proxy-Connection");
 
-    let https = HttpsConnector::new();
-    let client = Client::builder().build::<_, hyper::Body>(https);
+    let request_builder = HTTP_CLIENT
+        .request(req.method().clone(), req.uri().to_string())
+        .headers(headers)
+        .body(hyper::body::to_bytes(req.into_body()).await?)
+        .header(header::USER_AGENT, &config.proxy.user_agent);
 
-    let response = client.request(req).await?;
+    let response = request_builder.send().await?;
 
     let status = response.status();
     let headers = response.headers().clone();
-    let body_bytes = hyper::body::to_bytes(response.into_body()).await?;
+    let body_bytes = response.bytes().await?;
 
     if status == StatusCode::OK && method == Method::GET {
-        let content_type = headers
-            .get(header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("application/octet-stream")
-            .to_string();
+        let mut headers_to_cache = HeaderMap::new();
+        for (key, value) in headers.iter() {
+            if key != header::CONNECTION && key != header::TRANSFER_ENCODING {
+                headers_to_cache.insert(key.clone(), value.clone());
+            }
+        }
 
         cache
-            .put(cache_key, &uri_string, body_bytes.to_vec(), &content_type)
+            .put(cache_key, &uri_string, body_bytes.to_vec(), headers_to_cache)
             .await;
     }
 
-    let mut builder = Response::builder().status(status);
-    *builder.headers_mut().unwrap() = headers;
+    let mut builder = Response::builder().status(status.as_u16());
+    *builder.headers_mut().unwrap() = headers.clone();
     Ok(builder.body(Body::from(body_bytes))?)
 }

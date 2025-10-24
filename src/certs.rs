@@ -58,6 +58,7 @@ impl CertificateAuthority {
         })
     }
 
+    // YAZIM HATASI DÜZELTİLDİ: Serverconfig -> ServerConfig
     pub fn get_server_config(&self, domain: &str) -> Result<Arc<ServerConfig>> {
         let mut cache = self.leaf_cache.lock().unwrap();
         if let Some(config) = cache.get(domain) {
@@ -91,7 +92,8 @@ impl CertificateAuthority {
             .with_no_client_auth()
             .with_single_cert(cert_chain, key)?;
 
-        config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        // HATA DÜZELTME: Tarayıcıyı HTTP/1.1 kullanmaya zorla
+        config.alpn_protocols = vec![b"http/1.1".to_vec()];
 
         let arc_config = Arc::new(config);
         cache.insert(domain.to_string(), arc_config.clone());

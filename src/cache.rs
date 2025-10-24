@@ -1,6 +1,7 @@
 use crate::config::Settings;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use hyper::HeaderMap;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -13,10 +14,12 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
 
+// GÜNCELLENDİ: Başlıkları saklamak için 'headers' alanı eklendi.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CacheEntry {
     pub data: Vec<u8>,
-    pub content_type: String,
+    #[serde(with = "http_serde::header_map")]
+    pub headers: HeaderMap,
     pub created_at: DateTime<Utc>,
     pub url: String,
 }
@@ -69,7 +72,6 @@ impl CacheManager {
             stats: Arc::new(CacheStatsInternal::default()),
         };
 
-        // Initialize disk stats on startup
         if let Some(path) = &cache.disk_path {
             if let Ok(entries) = fs::read_dir(path) {
                 let mut count = 0;
@@ -103,12 +105,12 @@ impl CacheManager {
     }
 
     pub async fn get(&self, key: &str) -> Option<CacheEntry> {
-        self.stats.misses.fetch_add(1, Ordering::Relaxed); // Optimistically increment misses
+        self.stats.misses.fetch_add(1, Ordering::Relaxed);
         let mut mem_cache = self.memory_cache.lock().await;
         if let Some(entry) = mem_cache.get(key) {
             if !self.is_expired(entry) {
                 self.stats.hits.fetch_add(1, Ordering::Relaxed);
-                self.stats.misses.fetch_sub(1, Ordering::Relaxed); // Correct the miss count
+                self.stats.misses.fetch_sub(1, Ordering::Relaxed);
                 self.stats.data_served_from_cache_bytes.fetch_add(entry.data.len() as u64, Ordering::Relaxed);
                 debug!("CACHE HIT (memory): {}", key);
                 return Some(entry.clone());
@@ -139,10 +141,11 @@ impl CacheManager {
         None
     }
 
-    pub async fn put(&self, key: &str, url: &str, data: Vec<u8>, content_type: &str) {
+    // GÜNCELLENDİ: `headers` parametresi eklendi
+    pub async fn put(&self, key: &str, url: &str, data: Vec<u8>, headers: HeaderMap) {
         let entry = CacheEntry {
             data,
-            content_type: content_type.to_string(),
+            headers,
             created_at: Utc::now(),
             url: url.to_string(),
         };
@@ -172,7 +175,9 @@ impl CacheManager {
     pub async fn clear(&self) {
         self.memory_cache.lock().await.clear();
         if let Some(path) = &self.disk_path {
-            let _ = fs::remove_dir_all(path);
+            if let Err(e) = fs::remove_dir_all(path) {
+                warn!("Could not clear disk cache (might be empty): {}", e);
+            }
             let _ = fs::create_dir_all(path);
         }
         self.stats.hits.store(0, Ordering::Relaxed);
@@ -200,11 +205,13 @@ impl CacheManager {
     pub async fn get_all_entries(&self) -> Result<BTreeMap<String, CacheEntry>> {
         let mut all_entries = BTreeMap::new();
         if let Some(path) = &self.disk_path {
+            if !path.exists() { return Ok(all_entries); }
             let mut read_dir = tokio::fs::read_dir(path).await?;
             while let Some(entry) = read_dir.next_entry().await? {
                 if entry.metadata().await?.is_file() {
                     let file_content = tokio::fs::read(entry.path()).await?;
                     if let Ok(decoded) = bincode::deserialize::<CacheEntry>(&file_content) {
+                        // GÜNCELLENDİ: Eskiden content_type'a göre hash alıyorduk, url'e göre olmalı
                         all_entries.insert(self.key_to_hash(&decoded.url), decoded);
                     }
                 }
