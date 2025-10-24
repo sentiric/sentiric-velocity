@@ -109,7 +109,7 @@
         }
 
         function formatBytes(bytes, decimals = 2) {
-            if (bytes === 0) return '0 Bytes';
+            if (!bytes || bytes === 0) return '0 Bytes';
             const k = 1024;
             const dm = decimals < 0 ? 0 : decimals;
             const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
@@ -168,10 +168,12 @@
 
                 for (const [hash, entry] of Object.entries(data)) {
                     const row = document.createElement('tr');
+                    // NİHAİ DÜZELTME: Artık var olmayan `entry.content_type` yerine, `entry.headers` objesinden 'content-type' okunuyor.
+                    const contentType = entry.headers['content-type'] || 'N/A';
                     row.innerHTML = `
                         <td class="url-cell" title="${entry.url}">${entry.url}</td>
-                        <td>${entry.content_type}</td>
-                        <td>${formatBytes(entry.data.length)}</td>
+                        <td>${contentType.split(';')[0]}</td>
+                        <td>${formatBytes(entry.data ? entry.data.length : 0)}</td>
                         <td>${formatAge(entry.created_at)}</td>
                         <td><button class="btn btn-small" onclick="deleteEntry('${hash}')">Sil</button></td>
                     `;

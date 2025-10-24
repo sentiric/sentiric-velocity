@@ -1,63 +1,66 @@
 use crate::cache::CacheManager;
 use crate::config;
 use anyhow::Result;
-use async_trait::async_trait;
+use futures_util::stream::StreamExt;
 use hyper::client::connect::dns::Name;
-use hyper::{header, Body, HeaderMap, Method, Request, Response, StatusCode};
+use hyper::client::HttpConnector;
+use hyper::service::Service;
+use hyper::{header, Body, Client, HeaderMap, Method, Request, Response, StatusCode};
+use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use lazy_static::lazy_static;
-use reqwest::dns::Resolve;
-use reqwest::{redirect, Client}; // DÜZELTME: `redirect` modülü import edildi
-use std::error::Error as StdError;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 use tracing::{info, warn};
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::TokioAsyncResolver;
 
+// hyper::service::Service<Name> trait'ini uygulayan adaptör.
+#[derive(Clone)]
 struct TrustDnsResolver(TokioAsyncResolver);
 
-impl TrustDnsResolver {
-    fn new() -> Self {
-        let resolver =
-            TokioAsyncResolver::tokio(ResolverConfig::cloudflare(), ResolverOpts::default())
-                .unwrap();
-        Self(resolver)
-    }
-}
+impl Service<Name> for TrustDnsResolver {
+    type Response = std::vec::IntoIter<SocketAddr>;
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
-#[async_trait]
-impl Resolve for TrustDnsResolver {
-    fn resolve(
-        &self,
-        name: Name,
-    ) -> Pin<Box<dyn Future<Output = Result<Box<dyn Iterator<Item = SocketAddr> + Send + 'static>, Box<dyn StdError + Send + Sync>>> + Send>>
-    {
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, name: Name) -> Self::Future {
         let resolver = self.0.clone();
         Box::pin(async move {
             let addrs = resolver.lookup_ip(name.as_str()).await?;
-            let mut sock_addrs: Vec<SocketAddr> =
+            let sock_addrs: Vec<SocketAddr> =
                 addrs.into_iter().map(|addr| (addr, 0).into()).collect();
-            sock_addrs.dedup();
-            let iter: Box<dyn Iterator<Item = SocketAddr> + Send + 'static> = Box::new(sock_addrs.into_iter());
-            Ok(iter)
+            Ok(sock_addrs.into_iter())
         })
     }
 }
 
 
 lazy_static! {
-    static ref HTTP_CLIENT: Client = {
-        let resolver = TrustDnsResolver::new();
-        reqwest::Client::builder()
-            .dns_resolver(Arc::new(resolver))
-            .no_proxy()
-            .http1_only()
-            // NİHAİ DÜZELTME: Yönlendirmeleri otomatik takip etme. Proxy'nin kendisi değil, tarayıcı yönlendirmeyi takip etmeli.
-            .redirect(redirect::Policy::none())
-            .build()
-            .expect("Failed to build reqwest client")
+    static ref HTTP_CLIENT: Client<HttpsConnector<HttpConnector<TrustDnsResolver>>> = {
+        let resolver = TrustDnsResolver(
+            TokioAsyncResolver::tokio(
+                ResolverConfig::cloudflare(),
+                ResolverOpts::default(),
+            ).unwrap()
+        );
+
+        let mut http = HttpConnector::new_with_resolver(resolver);
+        http.enforce_http(false);
+
+        let https = HttpsConnectorBuilder::new()
+            .with_native_roots()
+            .https_only()
+            .enable_http1()
+            .wrap_connector(http);
+
+        Client::builder().build(https)
     };
 }
 
@@ -93,7 +96,7 @@ pub async fn proxy_handler(
 }
 
 async fn forward_request(
-    req: Request<Body>,
+    mut req: Request<Body>,
     cache: Arc<CacheManager>,
     cache_key: &str,
 ) -> Result<Response<Body>> {
@@ -101,43 +104,67 @@ async fn forward_request(
     let method = req.method().clone();
     let uri_string = req.uri().to_string();
 
-    let mut headers = req.headers().clone();
-    headers.remove(header::CONNECTION);
-    headers.remove("keep-alive");
-    headers.remove(header::PROXY_AUTHENTICATE);
-    headers.remove(header::PROXY_AUTHORIZATION);
-    headers.remove(header::TE);
-    headers.remove(header::TRAILER);
-    headers.remove(header::TRANSFER_ENCODING);
-    headers.remove(header::UPGRADE);
-    headers.remove("Proxy-Connection");
+    req.headers_mut().remove(header::CONNECTION);
+    req.headers_mut().remove("keep-alive");
+    req.headers_mut().remove(header::PROXY_AUTHENTICATE);
+    req.headers_mut().remove(header::PROXY_AUTHORIZATION);
+    req.headers_mut().remove(header::TE);
+    req.headers_mut().remove(header::TRAILER);
+    req.headers_mut().remove(header::TRANSFER_ENCODING);
+    req.headers_mut().remove(header::UPGRADE);
+    req.headers_mut().remove("Proxy-Connection");
 
-    let request_builder = HTTP_CLIENT
-        .request(req.method().clone(), req.uri().to_string())
-        .headers(headers)
-        .body(hyper::body::to_bytes(req.into_body()).await?)
-        .header(header::USER_AGENT, &config.proxy.user_agent);
+    req.headers_mut()
+        .insert(header::USER_AGENT, config.proxy.user_agent.parse()?);
 
-    let response = request_builder.send().await?;
+    let response = HTTP_CLIENT.request(req).await?;
 
     let status = response.status();
     let headers = response.headers().clone();
-    let body_bytes = response.bytes().await?;
+    
+    let (mut sender, client_body) = Body::channel();
 
-    if status == StatusCode::OK && method == Method::GET {
-        let mut headers_to_cache = HeaderMap::new();
-        for (key, value) in headers.iter() {
-            if key != header::CONNECTION && key != header::TRANSFER_ENCODING {
-                headers_to_cache.insert(key.clone(), value.clone());
+    let should_cache = status == StatusCode::OK && method == Method::GET;
+    let mut body_stream = response.into_body();
+
+    // NİHAİ DÜZELTME: Sahiplik ve yaşam süresi hatalarını çözmek için gerekli klonlamalar.
+    let cache_key_owned = cache_key.to_string();
+    let headers_clone_for_cache = headers.clone();
+
+    tokio::spawn(async move {
+        let mut body_buffer = if should_cache { Some(Vec::new()) } else { None };
+
+        while let Some(chunk) = body_stream.next().await {
+            match chunk {
+                Ok(bytes) => {
+                    if let Some(buffer) = body_buffer.as_mut() {
+                        buffer.extend_from_slice(&bytes);
+                    }
+                    if sender.send_data(bytes).await.is_err() {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    warn!("Upstream'den veri okunurken hata: {}", e);
+                    break;
+                }
             }
         }
 
-        cache
-            .put(cache_key, &uri_string, body_bytes.to_vec(), headers_to_cache)
-            .await;
-    }
+        if let Some(buffer) = body_buffer {
+            let mut headers_to_cache = HeaderMap::new();
+            for (key, value) in headers_clone_for_cache.iter() {
+                if key != header::CONNECTION && key != header::TRANSFER_ENCODING {
+                    headers_to_cache.insert(key.clone(), value.clone());
+                }
+            }
+            cache
+                .put(&cache_key_owned, &uri_string, buffer, headers_to_cache)
+                .await;
+        }
+    });
 
-    let mut builder = Response::builder().status(status.as_u16());
-    *builder.headers_mut().unwrap() = headers.clone();
-    Ok(builder.body(Body::from(body_bytes))?)
+    let mut builder = Response::builder().status(status);
+    *builder.headers_mut().unwrap() = headers;
+    Ok(builder.body(client_body)?)
 }
