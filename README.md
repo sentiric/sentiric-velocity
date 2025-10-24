@@ -72,3 +72,30 @@ Betikleri kullanmanın yanı sıra, `velocache` uygulamasını doğrudan da çal
 - **Sunucuyu Başlat (Ön Planda):** `velocache run`
 - **Durumu Kontrol Et:** `velocache status`
 - **Sunucuyu Durdur:** `velocache stop`
+
+---
+## 👥 Uzak Kullanıcılar İçin Proxy Kullanımı
+
+Bu proxy sunucusunu başka makinelerden kullanmak için, `client-scripts` klasöründeki betikleri kullanabilirsiniz.
+
+**Önemli:** Betikleri kullanmadan önce, içlerindeki `PROXY_IP` değişkenini VeloCache sunucusunun çalıştığı makinenin IP adresi ile değiştirmeniz gerekmektedir.
+
+### Windows İstemcileri İçin
+
+1.  `client-scripts/connect-proxy.bat` dosyasını çalıştırarak sistem proxy ayarlarınızı etkinleştirin.
+2.  İşiniz bittiğinde, `client-scripts/disconnect-proxy.bat` dosyasını çalıştırarak ayarları geri alın.
+
+### Linux/macOS İstemcileri İçin
+
+Linux ve macOS'ta proxy ayarları genellikle mevcut terminal oturumu için ayarlanır.
+
+1.  Proxy'yi etkinleştirmek için betiği `source` komutu ile çalıştırın:
+    ```bash
+    source client-scripts/connect-proxy.sh
+    ```
+2.  Proxy'yi devre dışı bırakmak için, aynı terminalde aşağıdaki komutu çalıştırın:
+    ```bash
+    disconnect-proxy
+    ```
+    (Bu komut, `connect-proxy.sh` tarafından otomatik olarak oluşturulur.)
+    Alternatif olarak, yeni bir terminal açarak da proxy'siz bir oturum başlatabilirsiniz.
