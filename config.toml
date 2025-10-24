@@ -1,0 +1,26 @@
+[proxy]
+port = 3128
+bind_address = "127.0.0.1"
+user_agent = "VeloCache/1.0"
+whitelist = [
+    "docker.io",
+    "registry-1.docker.io",
+    "download.docker.com",
+    "archive.ubuntu.com",
+    "packages.microsoft.com"
+]
+
+[cache]
+# Bellekte tutulacak maksimum öğe sayısı
+memory_items = 1000
+# Cache'lenen dosyaların diske yazılacağı klasör. Boş bırakırsanız disk cache devre dışı kalır.
+disk_path = "./.cache"
+# Cache'lenen bir öğenin maksimum TTL süresi (saniye cinsinden)
+ttl_seconds = 86400 # 24 saat
+
+[management]
+port = 8080
+bind_address = "127.0.0.1"
+
+[log]
+level = "info" # debug, info, warn, error
