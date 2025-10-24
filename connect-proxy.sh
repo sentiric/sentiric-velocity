@@ -1,29 +1,69 @@
 #!/bin/bash
-# VeloCache Proxy'ye baglanmak icin bu betigi 'source' komutu ile calistirin.
-# Ornek: source ./connect-proxy.sh
+# ====================================================================================
+# VeloCache Pro - WSL Bağlantı ve Kurulum Betiği v3.0 (Mirrored Mode Final)
+#
+# Bu betik, modern WSL'in "Mirrored" ağ modunun özelliklerinden faydalanarak,
+# WSL ortamınızı Windows üzerinde çalışan VeloCache proxy'sine bağlar.
+#
+# Kullanım: source ./connect-proxy.sh
+# ====================================================================================
 
-# !!! BU BÖLÜMÜ KENDİ SUNUCU BİLGİLERİNİZLE DEĞİŞTİRİN !!!
-PROXY_IP="127.0.0.1"
+# --- Ayarlar ---
 PROXY_PORT="3128"
-# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+CERT_SOURCE_PATH="./certs/ca.crt"
 
-export http_proxy="http://${PROXY_IP}:${PROXY_PORT}"
-export https_proxy="http://${PROXY_IP}:${PROXY_PORT}"
+# --- Betik Başlangıcı ---
+echo "🚀 VeloCache Pro WSL Bağlantı Asistanı başlatılıyor..."
+
+# Adım 1: Windows Ana Makinesinin IP Adresini Belirleme
+# Modern "Mirrored" ağ modunda, Windows localhost'u doğrudan WSL'in
+# localhost'una yansıtılır. Bu en basit ve en güvenilir yöntemdir.
+HOST_IP="127.0.0.1"
+
+echo "✅ WSL 'Mirrored' ağ modu algılandı. Proxy adresi olarak ${HOST_IP} kullanılacak."
+
+# Adım 2: Ortam Değişkenlerini Ayarlama
+export http_proxy="http://${HOST_IP}:${PROXY_PORT}"
+export https_proxy="http://${HOST_IP}:${PROXY_PORT}"
 export HTTP_PROXY="$http_proxy"
 export HTTPS_PROXY="$https_proxy"
 export NO_PROXY="localhost,127.0.0.1,.local"
 
-echo "✅ VeloCache proxy etkinlestirildi. (Hedef Sunucu: ${PROXY_IP})"
-echo "   Bu ayarlar sadece bu terminal oturumu icin gecerlidir."
-echo "   Kapatmak icin 'disconnect-proxy' komutunu kullanin veya yeni bir terminal acin."
+echo "✅ Proxy ortam değişkenleri ayarlandı: ${http_proxy}"
 
-# Kolaylik olmasi icin bir alias tanimlayalim
-alias disconnect-proxy="unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY; unalias disconnect-proxy; echo '🗑️ VeloCache proxy devre disi birakildi.'"
+# Adım 3: apt Paket Yöneticisini Yapılandırma
+echo "🔧 apt paket yöneticisi yapılandırılıyor..."
+APT_CONF_FILE="/etc/apt/apt.conf.d/99velocache_proxy.conf"
+# sudo yetkisi gerektirecek, şifre istenebilir
+echo "Acquire::http::Proxy \"${http_proxy}\";" | sudo tee "$APT_CONF_FILE" > /dev/null
+echo "Acquire::https::Proxy \"${https_proxy}\";" | sudo tee -a "$APT_CONF_FILE" > /dev/null
+echo "✅ apt yapılandırması tamamlandı."
 
-echo 'Acquire::http::Proxy "http://127.0.0.1:3128";' | sudo tee /etc/apt/apt.conf.d/99proxy
-echo 'Acquire::https::Proxy "http://127.0.0.1:3128";' | sudo tee -a /etc/apt/apt.conf.d/99proxy
+# Adım 4: VeloCache Kök Sertifikasını Yükleme ve Güvenme
+echo "🔐 VeloCache Güven Sertifikası kontrol ediliyor..."
+CERT_DEST_PATH="/usr/local/share/ca-certificates/velocache_pro_ca.crt"
 
-# /mnt/c/ -> Windows C: sürücüsüne karşılık gelir
-sudo cp /mnt/c/sentiric/sentiric-velocity/certs/ca.crt /usr/local/share/ca-certificates/velocache.crt
+if [ ! -f "$CERT_SOURCE_PATH" ]; then
+    echo "❌ HATA: Sertifika dosyası bulunamadı: ${CERT_SOURCE_PATH}"
+    echo "   Lütfen VeloCache'i en az bir kez çalıştırdığınızdan emin olun."
+    return 1
+fi
 
-sudo update-ca-certificates
+# Sertifikanın zaten kurulu olup olmadığını kontrol et
+if [ -f "$CERT_DEST_PATH" ] && cmp -s "$CERT_SOURCE_PATH" "$CERT_DEST_PATH"; then
+    echo "✅ Sertifika zaten güncel ve kurulu."
+else
+    echo "🔧 Sertifika yükleniyor... (sudo şifresi gerekebilir)"
+    sudo cp "$CERT_SOURCE_PATH" "$CERT_DEST_PATH"
+    sudo update-ca-certificates
+    echo "✅ Sertifika başarıyla yüklendi ve güvenilir hale getirildi."
+fi
+
+# Adım 5: Kolay Çıkış İçin disconnect-proxy Alias'ı Tanımlama
+alias disconnect-proxy="source ./disconnect-proxy.sh"
+
+echo ""
+echo "===================================================================="
+echo "🎉 Kurulum Tamamlandı! Bu terminal oturumu artık VeloCache kullanıyor."
+echo "   Proxy'yi devre dışı bırakmak için 'disconnect-proxy' komutunu çalıştırın."
+echo "===================================================================="
