@@ -18,10 +18,8 @@ echo  🚀 VeloCache Başlatılıyor...
 echo =================================
 cd /d "%~dp0"
 
-REM Derlenmiş dosyanın tam yolunu al
 set "PROGRAM_PATH=%~dp0target\release\velocache.exe"
 
-REM Derlenmiş dosyanın varlığını kontrol et
 if not exist "%PROGRAM_PATH%" (
     echo.
     echo ❌ HATA: velocache.exe bulunamadı!
@@ -34,7 +32,7 @@ if not exist "%PROGRAM_PATH%" (
 echo.
 echo 🔥 Windows Güvenlik Duvarı kuralı oluşturuluyor (WSL erişimi için)...
 powershell -Command "Remove-NetFirewallRule -DisplayName 'VeloCache Proxy' -ErrorAction SilentlyContinue" >nul
-powershell -Command "New-NetFirewallRule -DisplayName 'VeloCache Proxy' -Direction Inbound -Protocol TCP -LocalPort 3128 -Program '%PROGRAM_PATH%' -Action Allow" >nul
+powershell -Command "New-NetFirewallRule -DisplayName 'VeloCache Proxy' -Direction Inbound -Protocol TCP -LocalPort 3128 -Action Allow" >nul
 echo ✅ Güvenlik duvarı kuralı başarıyla eklendi.
 
 echo.
