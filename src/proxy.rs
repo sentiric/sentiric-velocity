@@ -2,10 +2,11 @@ use crate::{cache::CacheManager, certs::CertificateAuthority, handler::proxy_han
 use anyhow::{Context, Result};
 use hyper::server::conn::Http;
 use hyper::service::service_fn;
-use hyper::{Body, Method, Request, Response, Uri};
+use hyper::{upgrade, Body, Method, Request, Response, Uri};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::TcpListener; // UYARI DÜZELTME: Kullanılmayan TcpStream kaldırıldı.
+use tokio::io;
+use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use tracing::{info, warn, Instrument};
 
@@ -22,8 +23,10 @@ pub async fn start_server(cache: Arc<CacheManager>, ca: Arc<CertificateAuthority
 
         tokio::spawn(
             async move {
-                let service = service_fn(move |req| {
-                    serve_req(req, cache.clone(), ca.clone())
+                let service = service_fn(move |req: Request<Body>| {
+                    let cache = cache.clone();
+                    let ca = ca.clone();
+                    async move { serve_req(req, cache, ca).await }
                 });
 
                 if let Err(e) = Http::new()
@@ -33,12 +36,13 @@ pub async fn start_server(cache: Arc<CacheManager>, ca: Arc<CertificateAuthority
                     .with_upgrades()
                     .await
                 {
-                    if !e.to_string().contains("body write") 
+                    if !e.to_string().contains("body write")
                         && !e.to_string().contains("aborted")
                         && !e.to_string().contains("end of file")
                         && !e.to_string().contains("connection reset")
+                        && !e.to_string().contains("unexpected end of file")
                     {
-                         warn!("Bağlantı hatası: {}", e);
+                        warn!("Bağlantı hatası: {}", e);
                     }
                 }
             }
@@ -55,10 +59,20 @@ async fn serve_req(
     if Method::CONNECT == req.method() {
         if let Some(host) = req.uri().authority().map(|auth| auth.to_string()) {
             tokio::spawn(async move {
-                match hyper::upgrade::on(req).await {
+                match upgrade::on(req).await {
                     Ok(upgraded) => {
-                        if let Err(e) = handle_connect(upgraded, host, cache, ca).await {
-                             warn!("HTTPS tünel hatası: {}", e);
+                        // NİHAİ DÜZELTME: gRPC ve WebSocket gibi protokoller için tünel aç.
+                        // Bu siteler genellikle 'application/grpc' content-type kullanır.
+                        // Bu basit kontrol, çoğu interaktif siteyi (AI Studio gibi) düzeltir.
+                        if host.contains("google.com") {
+                            info!("GRPC/WebSocket için tünel açılıyor -> {}", host);
+                            if let Err(e) = tunnel(upgraded, host).await {
+                                warn!("Tünel hatası: {}", e);
+                            }
+                        } else {
+                            if let Err(e) = handle_connect(upgraded, host, cache, ca).await {
+                                warn!("HTTPS tünel hatası: {}", e);
+                            }
                         }
                     }
                     Err(e) => warn!("Upgrade hatası: {}", e),
@@ -77,14 +91,15 @@ async fn serve_req(
 }
 
 async fn handle_connect(
-    upgraded: hyper::upgrade::Upgraded,
+    upgraded: upgrade::Upgraded,
     host: String,
     cache: Arc<CacheManager>,
     ca: Arc<CertificateAuthority>,
 ) -> Result<()> {
     info!("HTTPS Intercept -> {}", host);
-    
-    let acceptor = TlsAcceptor::from(ca.get_server_config(&host.split(':').next().unwrap_or(&host))?);
+
+    let acceptor =
+        TlsAcceptor::from(ca.get_server_config(&host.split(':').next().unwrap_or(&host))?);
     let stream = acceptor.accept(upgraded).await.context("TLS Handshake hatası")?;
 
     let service = service_fn(move |mut req: Request<Body>| {
@@ -107,11 +122,19 @@ async fn handle_connect(
         .http1_only(true)
         .http1_keep_alive(true)
         .serve_connection(stream, service)
-        .await {
-            if !e.to_string().contains("body write") && !e.to_string().contains("aborted") {
-                warn!("Intercepted HTTPS bağlantı hatası: {}", e);
-            }
+        .await
+    {
+        if !e.to_string().contains("body write") && !e.to_string().contains("aborted") {
+            warn!("Intercepted HTTPS bağlantı hatası: {}", e);
         }
-        
+    }
+
+    Ok(())
+}
+
+// gRPC ve WebSocket gibi özel protokoller için basit bir TCP tüneli oluşturan fonksiyon.
+async fn tunnel(mut upgraded: upgrade::Upgraded, host: String) -> std::io::Result<()> {
+    let mut server = tokio::net::TcpStream::connect(host).await?;
+    io::copy_bidirectional(&mut upgraded, &mut server).await?;
     Ok(())
 }

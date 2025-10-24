@@ -1,7 +1,6 @@
 use crate::cache::CacheManager;
 use crate::config;
 use anyhow::Result;
-use futures_util::stream::StreamExt;
 use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
 use hyper::service::Service;
@@ -54,6 +53,7 @@ lazy_static! {
         let mut http = HttpConnector::new_with_resolver(resolver);
         http.enforce_http(false);
 
+        // NİHAİ DÜZELTME: Fazladan .build() çağrısı kaldırıldı. wrap_connector zaten son adımı gerçekleştiriyor.
         let https = HttpsConnectorBuilder::new()
             .with_native_roots()
             .https_only()
@@ -121,50 +121,22 @@ async fn forward_request(
 
     let status = response.status();
     let headers = response.headers().clone();
-    
-    let (mut sender, client_body) = Body::channel();
+    let body_bytes = hyper::body::to_bytes(response.into_body()).await?;
 
-    let should_cache = status == StatusCode::OK && method == Method::GET;
-    let mut body_stream = response.into_body();
-
-    // NİHAİ DÜZELTME: Sahiplik ve yaşam süresi hatalarını çözmek için gerekli klonlamalar.
-    let cache_key_owned = cache_key.to_string();
-    let headers_clone_for_cache = headers.clone();
-
-    tokio::spawn(async move {
-        let mut body_buffer = if should_cache { Some(Vec::new()) } else { None };
-
-        while let Some(chunk) = body_stream.next().await {
-            match chunk {
-                Ok(bytes) => {
-                    if let Some(buffer) = body_buffer.as_mut() {
-                        buffer.extend_from_slice(&bytes);
-                    }
-                    if sender.send_data(bytes).await.is_err() {
-                        break;
-                    }
-                }
-                Err(e) => {
-                    warn!("Upstream'den veri okunurken hata: {}", e);
-                    break;
-                }
+    if status == StatusCode::OK && method == Method::GET {
+        let mut headers_to_cache = HeaderMap::new();
+        for (key, value) in headers.iter() {
+            if key != header::CONNECTION && key != header::TRANSFER_ENCODING {
+                headers_to_cache.insert(key.clone(), value.clone());
             }
         }
 
-        if let Some(buffer) = body_buffer {
-            let mut headers_to_cache = HeaderMap::new();
-            for (key, value) in headers_clone_for_cache.iter() {
-                if key != header::CONNECTION && key != header::TRANSFER_ENCODING {
-                    headers_to_cache.insert(key.clone(), value.clone());
-                }
-            }
-            cache
-                .put(&cache_key_owned, &uri_string, buffer, headers_to_cache)
-                .await;
-        }
-    });
+        cache
+            .put(cache_key, &uri_string, body_bytes.to_vec(), headers_to_cache)
+            .await;
+    }
 
     let mut builder = Response::builder().status(status);
     *builder.headers_mut().unwrap() = headers;
-    Ok(builder.body(client_body)?)
+    Ok(builder.body(Body::from(body_bytes))?)
 }

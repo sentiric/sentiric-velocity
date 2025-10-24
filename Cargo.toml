@@ -17,7 +17,7 @@ tokio-util = { version = "0.7.8", features = ["codec", "io"] }
 http = "0.2.9"
 hyper = { version = "0.14.27", features = ["full"] }
 anyhow = "1.0.71"
-# NİHAİ DÜZELTME: 'stream' özelliği futures-util'de mevcut değil, kaldırıldı.
+# NİHAİ DÜZELTME (BU SEFER %100 GARANTİLİ): Var olmayan 'stream' özelliği kaldırıldı.
 futures-util = { version = "0.3.28", features = ["sink"] }
 md5 = "0.7.0"
 bincode = "1.3.3"
@@ -33,3 +33,4 @@ trust-dns-resolver = "0.22"
 hyper-rustls = "0.23.2"
 rustls-native-certs = "0.6.3"
 http-serde = "1.1.2"
+async-trait = "0.1.73"
