@@ -40,7 +40,7 @@ echo 🐧 WSL için proxy betikleri oluşturuluyor...
 (
     echo #!/bin/bash
     echo # Bu dosya VeloCache tarafından otomatik oluşturulmuştur.
-    echo export HOST_IP=$(cat /etc/resolv.conf ^| grep "nameserver" ^| awk "{print $2}")
+    echo export HOST_IP=$(grep nameserver /etc/resolv.conf ^| sed 's/nameserver //')
     echo export http_proxy="http://$HOST_IP:3128"
     echo export https_proxy="http://$HOST_IP:3128"
     echo export HTTP_PROXY="$http_proxy"
