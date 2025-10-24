@@ -6,22 +6,25 @@ VeloCache v2.0, modüler ve çok-protokollü bir "ağ beyni" olarak tasarlanmı�
 
 Tüm bileşenler, `Arc<T>` aracılığıyla paylaşılan merkezi durum (state) yapılarına (örn. `CacheManager`, `RuleEngine`, `CertificateAuthority`) erişir.
 
-### 2. Yüksek Seviye Mimari Şeması
+## 2. Yüksek Seviye Mimari Şeması
 
 Aşağıdaki şema, VeloCache Pro'nun temel bileşenlerini ve aralarındaki etkileşimi göstermektedir. Sistem, dış dünyadan gelen ağ trafiğini işleyen **Çekirdek Katmanı** ve bu katmanı yöneten/gözlemleyen **Kontrol Düzlemi** olarak iki ana bölüme ayrılmıştır.
 
 ```mermaid
 graph TD
-    subgraph "Ağ İstemcileri"
+    %% -- Gruplar ve Düğümler --
+
+    subgraph ClientLayer ["Ağ İstemcileri"]
         direction LR
         UserBrowser["🌐 Tarayıcı"]
         UserCLI["👨‍💻 CLI (npm, docker, etc.)"]
         UserSIP["📞 SIP Telefonu"]
     end
 
-    subgraph "VeloCache Pro Çekirdek Katmanı"
+    subgraph CoreLayer ["VeloCache Pro Çekirdek Katmanı"]
         direction TB
-        subgraph "A. Evrensel Protokol Motoru"
+        
+        subgraph Engine ["A. Evrensel Protokol Motoru"]
             direction LR
             A1[("HTTP/S Proxy<br/>(hyper, rustls)")]
             A2[("DNS Proxy<br/>(trust-dns)")]
@@ -31,59 +34,57 @@ graph TD
 
         B1[/"B. Akıllı Kural ve<br/>Politika Motoru"/]
 
-        subgraph "B. Çok Stratejili Önbellek Katmanı"
+        subgraph CacheLayer ["B. Çok Stratejili Önbellek Katmanı"]
             direction LR
             B2_1["💾 Disk Önbelleği<br/>(Streaming, Kalıcı)"]
             B2_2["⚡ Bellek Önbelleği<br/>(LRU)"]
         end
         
-        A.-->|İstekleri iletir| B1
-        B1 -->|Karar verir (Cache/Pass/Deny)| A.
-        B1 -->|Önbelleğe yaz/oku talimatı verir| B.
+        Engine -->|İstekleri iletir| B1
+        B1 -->|Karar verir Cache/Pass/Deny| Engine
+        B1 -->|Önbelleğe yaz/oku talimatı| CacheLayer
     end
 
-    subgraph "İnternet ve Uzak Servisler"
+    subgraph RemoteLayer ["İnternet ve Uzak Servisler"]
         direction LR
         RemoteServices["☁️ Uzak Sunucular<br/>(API, CDN, Docker Hub)"]
         RemoteSIP["📞 Karşı SIP Ucu"]
     end
 
-    subgraph "C. Birleşik Kontrol Düzlemi"
+    subgraph ControlPlane ["C. Birleşik Kontrol Düzlemi"]
         direction TB
         C1[("Yönetim Sunucusu<br/>(warp API & WebSocket)")]
         C2[("Komut Satırı<br/>(CLI - clap)")]
         C3[("Masaüstü Companion<br/>(Tauri)")]
     end
     
+    %% -- Bağlantılar --
+
     UserBrowser --> A1
     UserCLI --> A1
     UserCLI --> A2
     UserSIP --> A3
     UserSIP --> A4
 
-    A. <--> RemoteServices
+    Engine <--> RemoteServices
     A3 <--> RemoteSIP
     A4 <--> RemoteSIP
     
     C1 <-.->|Yönetir & Gözlemler| B1
-    C1 <-.->|İstatistik & Yönetim| B.
+    C1 <-.->|İstatistik & Yönetim| CacheLayer
     C2 -.->|Komutları yürütür| C1
-    C3 -.->|Çekirdeği yönetir &<br/>Sistem ayarlarını yapar| VeloCache_Pro_Çekirdek_Katmanı
+    C3 -.->|Çekirdeği yönetir &<br/>Sistem ayarlarını yapar| CoreLayer
     
-    linkStyle 10 stroke:#2a9d8f,stroke-width:2px;
-    linkStyle 11 stroke:#2a9d8f,stroke-width:2px;
-    linkStyle 12 stroke:#2a9d8f,stroke-width:2px;
-    linkStyle 13 stroke:#e76f51,stroke-width:2px,stroke-dasharray: 5 5;
-    linkStyle 14 stroke:#e76f51,stroke-width:2px,stroke-dasharray: 5 5;
-    linkStyle 15 stroke:#e76f51,stroke-width:2px,stroke-dasharray: 5 5;
-
+    %% -- Stil Tanımları --
+    
     classDef client fill:#e9f5db,stroke:#333,stroke-width:2px
     classDef core fill:#e0fbfc,stroke:#0077b6,stroke-width:2px
     classDef control fill:#fff1e6,stroke:#d95f02,stroke-width:2px
     classDef remote fill:#f1faee,stroke:#6c757d,stroke-width:2px
+    
     class UserBrowser,UserCLI,UserSIP client;
-    class VeloCache_Pro_Çekirdek_Katmanı core;
-    class Birleşik_Kontrol_Düzlemi control;
+    class CoreLayer core;
+    class ControlPlane control;
     class RemoteServices,RemoteSIP remote;
 ```
 
@@ -132,6 +133,4 @@ Bu katman, farklı ağ protokollerini dinleyen ve işleyen bağımsız ama enteg
   - **Teknoloji:** `clap`.
   - **Sorumluluk:** Otomasyon ve "headless" yönetim için tüm temel işlevleri sunar (`velocache stats`, `velocache cache clear` vb.).
 
-
 ---
-
