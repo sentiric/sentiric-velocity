@@ -33,8 +33,8 @@ if not exist "%PROGRAM_PATH%" (
 
 echo.
 echo 🔥 Windows Güvenlik Duvarı kuralı oluşturuluyor (WSL erişimi için)...
-powershell -Command "Remove-NetFirewallRule -DisplayName 'VeloCache Proxy' -ErrorAction SilentlyContinue"
-powershell -Command "New-NetFirewallRule -DisplayName 'VeloCache Proxy' -Direction Inbound -Protocol TCP -LocalPort 3128 -Program '%PROGRAM_PATH%' -Action Allow"
+powershell -Command "Remove-NetFirewallRule -DisplayName 'VeloCache Proxy' -ErrorAction SilentlyContinue" >nul
+powershell -Command "New-NetFirewallRule -DisplayName 'VeloCache Proxy' -Direction Inbound -Protocol TCP -LocalPort 3128 -Program '%PROGRAM_PATH%' -Action Allow" >nul
 echo ✅ Güvenlik duvarı kuralı başarıyla eklendi.
 
 echo.
@@ -46,10 +46,33 @@ echo ✅ Windows Proxy etkinleştirildi.
 
 echo.
 echo 🐧 WSL için proxy betikleri oluşturuluyor...
+
+REM Önce eski dosyaları sil (varsa)
 if exist wsl-proxy.sh del wsl-proxy.sh
 if exist wsl-proxy-off.sh del wsl-proxy-off.sh
-(echo #!/bin/bash & echo # Bu dosya VeloCache tarafından otomatik oluşturulmuştur. & echo export HOST_IP=$(grep nameserver /etc/resolv.conf ^| sed 's/nameserver //') & echo export http_proxy="http://$HOST_IP:3128" & echo export https_proxy="http://$HOST_IP:3128" & echo export HTTP_PROXY="$http_proxy" & echo export HTTPS_PROXY="$https_proxy" & echo export NO_PROXY="localhost,127.0.0.1" & echo echo "✅ VeloCache proxy WSL için etkinleştirildi. (Host: $HOST_IP)") > wsl-proxy.sh
-(echo #!/bin/bash & echo # Bu dosya VeloCache tarafından otomatik oluşturulmuştur. & echo unset http_proxy & echo unset https_proxy & echo unset HTTP_PROXY & echo unset HTTPS_PROXY & echo unset NO_PROXY & echo echo "🗑️ VeloCache proxy WSL için devre dışı bırakıldı.") > wsl-proxy-off.sh
+
+REM wsl-proxy.sh dosyasını satır satır oluştur
+(echo #!/bin/bash) > wsl-proxy.sh
+(echo # Bu dosya VeloCache tarafından otomatik oluşturulmuştur.) >> wsl-proxy.sh
+(echo export HOST_IP=$(grep nameserver /etc/resolv.conf ^| sed 's/nameserver //')) >> wsl-proxy.sh
+(echo export http_proxy="http://$HOST_IP:3128") >> wsl-proxy.sh
+(echo export https_proxy="http://$HOST_IP:3128") >> wsl-proxy.sh
+(echo export HTTP_PROXY="$http_proxy") >> wsl-proxy.sh
+(echo export HTTPS_PROXY="$https_proxy") >> wsl-proxy.sh
+(echo export NO_PROXY="localhost,127.0.0.1") >> wsl-proxy.sh
+(echo echo "✅ VeloCache proxy WSL için etkinleştirildi. (Host: $HOST_IP)") >> wsl-proxy.sh
+
+REM wsl-proxy-off.sh dosyasını satır satır oluştur
+(echo #!/bin/bash) > wsl-proxy-off.sh
+(echo # Bu dosya VeloCache tarafından otomatik oluşturulmuştur.) >> wsl-proxy-off.sh
+(echo unset http_proxy) >> wsl-proxy-off.sh
+(echo unset https_proxy) >> wsl-proxy-off.sh
+(echo unset HTTP_PROXY) >> wsl-proxy-off.sh
+(echo unset HTTPS_PROXY) >> wsl-proxy-off.sh
+(echo unset NO_PROXY) >> wsl-proxy-off.sh
+(echo echo "🗑️ VeloCache proxy WSL için devre dışı bırakıldı.") >> wsl-proxy-off.sh
+
+echo 🐧 Satır sonları Linux formatına dönüştürülüyor...
 wsl dos2unix wsl-proxy.sh >nul 2>&1
 wsl dos2unix wsl-proxy-off.sh >nul 2>&1
 echo ✅ WSL betikleri kullanıma hazır.

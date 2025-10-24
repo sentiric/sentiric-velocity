@@ -5,4 +5,4 @@ unset https_proxy
 unset HTTP_PROXY 
 unset HTTPS_PROXY 
 unset NO_PROXY 
-echo "🗑️ VeloCache proxy WSL için devre dışı bırakıldı." 
+echo "🗑️ VeloCache proxy WSL için devre dışı bırakıldı."
