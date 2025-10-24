@@ -40,13 +40,13 @@ echo 🐧 WSL için proxy betikleri oluşturuluyor...
 (
     echo #!/bin/bash
     echo # Bu dosya VeloCache tarafından otomatik oluşturulmuştur.
-    echo export HOST_IP=$(cat /etc/resolv.conf ^| grep nameserver ^| awk '{print $2}')
-    echo export http_proxy="http://%HOST_IP%:3128"
-    echo export https_proxy="http://%HOST_IP%:3128"
-    echo export HTTP_PROXY=$http_proxy
-    echo export HTTPS_PROXY=$https_proxy
+    echo export HOST_IP=$(cat /etc/resolv.conf ^| grep "nameserver" ^| awk "{print $2}")
+    echo export http_proxy="http://$HOST_IP:3128"
+    echo export https_proxy="http://$HOST_IP:3128"
+    echo export HTTP_PROXY="$http_proxy"
+    echo export HTTPS_PROXY="$https_proxy"
     echo export NO_PROXY="localhost,127.0.0.1"
-    echo echo "✅ VeloCache proxy WSL için etkinleştirildi."
+    echo echo "✅ VeloCache proxy WSL için etkinleştirildi. (Host: $HOST_IP)"
 ) > wsl-proxy.sh
 
 (
@@ -59,7 +59,7 @@ echo 🐧 WSL için proxy betikleri oluşturuluyor...
     echo unset NO_PROXY
     echo echo "🗑️ VeloCache proxy WSL için devre dışı bırakıldı."
 ) > wsl-proxy-off.sh
-echo ✅ WSL betikleri oluşturuldu. (Detaylar için README.md'ye bakın)
+echo ✅ WSL betikleri oluşturuldu.
 
 echo.
 echo ✅ Sunucu yeni bir pencerede başlatılıyor...
