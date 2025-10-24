@@ -1,6 +1,6 @@
 [proxy]
 port = 3128
-bind_address = "127.0.0.1"
+bind_address = "0.0.0.0" # "127.0.0.1" yerine "0.0.0.0" yazın
 user_agent = "VeloCache/1.0"
 
 [cache]
@@ -13,7 +13,7 @@ ttl_seconds = 86400 # 24 saat
 
 [management]
 port = 8080
-bind_address = "127.0.0.1"
+bind_address = "127.0.0.1" # Yönetim paneli güvenlik için localhost'ta kalabilir
 
 [log]
 level = "info" # debug, info, warn, error
