@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VeloCache Yönetici</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f0f2f5; color: #1c1e21; margin: 0; }
+        .container { max-width: 900px; margin: 40px auto; padding: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { font-size: 2.5em; color: #005a9c; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 20px; text-align: center; }
+        .stat-card div:first-child { color: #606770; font-weight: 600; margin-bottom: 10px; }
+        .stat-value { font-size: 2.2em; font-weight: bold; color: #1c1e21; }
+        .controls { display: flex; justify-content: center; gap: 15px; }
+        .btn { padding: 12px 24px; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover { background: #c0392b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 VeloCache Yönetim Paneli</h1>
+            <p>Gerçek zamanlı proxy ve cache istatistikleri</p>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div>Durum</div>
+                <div class="stat-value" id="status">...</div>
+            </div>
+            <div class="stat-card">
+                <div>Hit Oranı</div>
+                <div class="stat-value" id="hitRate">...%</div>
+            </div>
+            <div class="stat-card">
+                <div>Bellekteki Öğe</div>
+                <div class="stat-value" id="itemCount">...</div>
+            </div>
+            <div class="stat-card">
+                <div>Disk Cache Boyutu</div>
+                <div class="stat-value" id="cacheSize">... MB</div>
+            </div>
+        </div>
+        <div class="controls">
+            <button class="btn btn-danger" onclick="clearCache()">🗑️ Tüm Cache'i Temizle</button>
+        </div>
+    </div>
+    <script>
+        async function refreshStats() {
+            try {
+                const response = await fetch('/api/stats');
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.json();
+                
+                document.getElementById('status').textContent = data.status === 'running' ? 'Aktif' : 'Durmuş';
+                document.getElementById('cacheSize').textContent = data.stats.total_disk_size_mb + ' MB';
+                document.getElementById('itemCount').textContent = data.stats.in_memory_items;
+                
+                const hits = data.stats.hits;
+                const misses = data.stats.misses;
+                const total = hits + misses;
+                const hitRate = total > 0 ? (hits / total) * 100 : 0;
+                document.getElementById('hitRate').textContent = hitRate.toFixed(1) + '%';
+
+            } catch (error) {
+                document.getElementById('status').textContent = 'Hata';
+                console.error('İstatistikler alınamadı:', error);
+            }
+        }
+        async function clearCache() {
+            if (confirm('Tüm bellek ve disk cache\'i kalıcı olarak temizlenecek. Emin misiniz?')) {
+                try {
+                    const response = await fetch('/api/clear', { method: 'POST' });
+                    if (!response.ok) throw new Error('Cache temizlenemedi.');
+                    alert('Cache başarıyla temizlendi!');
+                    refreshStats();
+                } catch (error) {
+                    alert('Hata: ' + error.message);
+                }
+            }
+        }
+        refreshStats();
+        setInterval(refreshStats, 3000);
+    </script>
+</body>
+</html>

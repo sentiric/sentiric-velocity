@@ -1,23 +1,19 @@
-// src/proxy.rs
-
-use crate::{config, management};
+use crate::{cache::CacheManager, config, management};
 use anyhow::Result;
 use hyper::server::conn::Http;
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Request, Server};
-use std::convert::Infallible;
+use hyper::service::service_fn; // Düzeltildi
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::{error, info};
 
-pub async fn start_server() -> Result<()> {
-    // Önce config'i yükle
-    config::init()?;
+// Fonksiyon artık cache_manager'ı argüman olarak alıyor
+pub async fn start_server(cache_manager: Arc<CacheManager>) -> Result<()> {
     let config = config::get();
 
-    // Yönetim sunucusunu ayrı bir görevde başlat
-    tokio::spawn(management::start_management_server());
+    // Yönetim sunucusunu ayrı bir görevde başlat ve cache'i ona da ver
+    let management_cache = cache_manager.clone();
+    tokio::spawn(management::start_management_server(management_cache));
 
     let addr = format!("{}:{}", config.proxy.bind_address, config.proxy.port).parse::<SocketAddr>()?;
 
@@ -27,13 +23,22 @@ pub async fn start_server() -> Result<()> {
 
     loop {
         let (stream, _) = listener.accept().await?;
+        
+        // Her yeni bağlantı için cache'in bir kopyasını (Arc clone) al
+        let cache_clone = cache_manager.clone();
+        
         tokio::spawn(async move {
-            let service = service_fn(move |req| crate::handler::proxy_handler(req));
+            // service_fn'e cache'i de geçir
+            let service = service_fn(move |req| {
+                crate::handler::proxy_handler(req, cache_clone.clone())
+            });
+
             if let Err(err) = Http::new().serve_connection(stream, service).await {
-                error!("İstemci bağlantısında hata: {}", err);
+                // Bağlantı kapandığında gelen "error shutting down" hatasını görmezden gel
+                if !err.to_string().contains("error shutting down") {
+                    error!("İstemci bağlantısında hata: {}", err);
+                }
             }
         });
     }
 }
-
-
