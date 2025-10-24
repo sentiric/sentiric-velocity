@@ -8,6 +8,7 @@ pub struct Settings {
     pub cache: Cache,
     pub management: Management,
     pub log: Log,
+    pub certs: Certs,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -15,10 +16,8 @@ pub struct Proxy {
     pub port: u16,
     pub bind_address: String,
     pub user_agent: String,
-    // whitelist: Vec<String>, // Bu satır silindi
 }
 
-// ... dosyanın geri kalanı aynı ...
 #[derive(Debug, Deserialize, Clone)]
 pub struct Cache {
     pub memory_items: usize,
@@ -35,6 +34,11 @@ pub struct Management {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Log {
     pub level: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Certs {
+    pub path: String,
 }
 
 static SETTINGS: OnceLock<Settings> = OnceLock::new();
