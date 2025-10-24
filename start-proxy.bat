@@ -29,6 +29,39 @@ if not exist "target\release\velocache.exe" (
 )
 
 echo.
+echo ⚙️  Windows Proxy ayarları etkinleştiriliyor...
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings" /v ProxyEnable /t REG_DWORD /d 1 /f >nul
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings" /v ProxyServer /t REG_SZ /d "127.0.0.1:3128" /f >nul
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings" /v ProxyOverride /t REG_SZ /d "<local>" /f >nul
+echo ✅ Windows Proxy etkinleştirildi.
+
+echo.
+echo 🐧 WSL için proxy betikleri oluşturuluyor...
+(
+    echo #!/bin/bash
+    echo # Bu dosya VeloCache tarafından otomatik oluşturulmuştur.
+    echo export HOST_IP=$(cat /etc/resolv.conf ^| grep nameserver ^| awk '{print $2}')
+    echo export http_proxy="http://%HOST_IP%:3128"
+    echo export https_proxy="http://%HOST_IP%:3128"
+    echo export HTTP_PROXY=$http_proxy
+    echo export HTTPS_PROXY=$https_proxy
+    echo export NO_PROXY="localhost,127.0.0.1"
+    echo echo "✅ VeloCache proxy WSL için etkinleştirildi."
+) > wsl-proxy.sh
+
+(
+    echo #!/bin/bash
+    echo # Bu dosya VeloCache tarafından otomatik oluşturulmuştur.
+    echo unset http_proxy
+    echo unset https_proxy
+    echo unset HTTP_PROXY
+    echo unset HTTPS_PROXY
+    echo unset NO_PROXY
+    echo echo "🗑️ VeloCache proxy WSL için devre dışı bırakıldı."
+) > wsl-proxy-off.sh
+echo ✅ WSL betikleri oluşturuldu. (Detaylar için README.md'ye bakın)
+
+echo.
 echo ✅ Sunucu yeni bir pencerede başlatılıyor...
 start "VeloCache Sunucu" target\release\velocache.exe run
 
@@ -39,5 +72,5 @@ echo.
 echo 🕒 Sunucunun başlaması için birkaç saniye bekleyin...
 timeout /t 3 /nobreak >nul
 echo.
-echo ✅ Başlatma işlemi tamamlandı. Logları diğer pencereden takip edebilirsiniz.
+echo ✅ Başlatma işlemi tamamlandı.
 pause

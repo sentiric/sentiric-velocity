@@ -1,26 +1,19 @@
 use crate::cache::CacheManager;
 use crate::config;
 use anyhow::Result;
-use hyper::{Body, Client, Method, Request, Response, StatusCode, Uri, header}; // header import'u eklendi
+use hyper::{Body, Client, Method, Request, Response, StatusCode, Uri, header};
 use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::io;
 use tracing::warn;
 
-// Bu fonksiyon değişmedi
 pub async fn proxy_handler(
     req: Request<Body>,
     cache: Arc<CacheManager>,
 ) -> Result<Response<Body>, Infallible> {
-    let host = req.uri().host().unwrap_or_default();
-    let config = config::get();
-    if !config.proxy.whitelist.is_empty() && !config.proxy.whitelist.iter().any(|domain| host.ends_with(domain)) {
-        warn!("Bloklanan istek (whitelist dışı): {}", host);
-        return Ok(Response::builder()
-            .status(StatusCode::FORBIDDEN)
-            .body(Body::from("Bu alan adı whitelist'te değil."))
-            .unwrap());
-    }
+    // ==========================================================
+    // BURADAKİ WHITELIST KONTROL BLOĞU TAMAMEN SİLİNDİ
+    // ==========================================================
 
     if Method::CONNECT == req.method() {
         match handle_connect(req).await {
@@ -53,17 +46,15 @@ pub async fn proxy_handler(
     }
 }
 
-// BU FONKSİYON GÜNCELLENDİ
+// ... dosyanın geri kalanı aynı ...
 async fn forward_http_request(
-    mut req: Request<Body>, // mut olarak değiştirildi
+    mut req: Request<Body>,
     cache: &Arc<CacheManager>,
     cache_key: &str,
 ) -> Result<Response<Body>> {
     let config = config::get();
     
-    // Giden istekten Host başlığını temizle, hyper bunu otomatik ekler
     req.headers_mut().remove(header::HOST);
-    // Kendi User-Agent başlığımızı ekle
     req.headers_mut().insert(
         header::USER_AGENT, 
         header::HeaderValue::from_str(&config.proxy.user_agent)?
@@ -81,7 +72,6 @@ async fn forward_http_request(
     }
 }
 
-// Bu fonksiyonlar değişmedi
 async fn handle_connect(req: Request<Body>) -> Result<Response<Body>> {
     if let Some(addr) = host_addr(req.uri()) {
         tokio::spawn(async move {

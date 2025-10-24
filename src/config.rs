@@ -15,9 +15,10 @@ pub struct Proxy {
     pub port: u16,
     pub bind_address: String,
     pub user_agent: String,
-    pub whitelist: Vec<String>,
+    // whitelist: Vec<String>, // Bu satır silindi
 }
 
+// ... dosyanın geri kalanı aynı ...
 #[derive(Debug, Deserialize, Clone)]
 pub struct Cache {
     pub memory_items: usize,
