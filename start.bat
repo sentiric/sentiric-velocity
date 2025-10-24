@@ -50,4 +50,4 @@ echo  Proxy Port: 127.0.0.1:3128
 echo ----------------------------------------------------
 echo.
 echo Bu pencereyi kapatabilirsiniz. Sunucu ayri bir pencerede calismaya devam edecek.
-pause
+@REM pause

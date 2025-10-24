@@ -23,4 +23,4 @@ echo ----------------------------------------------------
 echo  Durdurma islemi tamamlandi. Internet ayarlariniz normale dondu.
 echo ----------------------------------------------------
 echo.
-pause
+@REM pause
