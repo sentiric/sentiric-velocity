@@ -6,7 +6,6 @@ use atty::Stream;
 use tracing::info;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::Layer;
 
 mod cache;
 mod certs;

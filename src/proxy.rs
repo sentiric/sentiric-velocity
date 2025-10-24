@@ -5,7 +5,7 @@ use hyper::service::service_fn;
 use hyper::{Body, Method, Request, Response, Uri};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::TcpListener;
+use tokio::net::TcpListener; // UYARI DÜZELTME: Kullanılmayan TcpStream kaldırıldı.
 use tokio_rustls::TlsAcceptor;
 use tracing::{info, warn, Instrument};
 
@@ -84,7 +84,7 @@ async fn handle_connect(
 ) -> Result<()> {
     info!("HTTPS Intercept -> {}", host);
     
-    let acceptor = TlsAcceptor::from(ca.get_server_config(&host)?);
+    let acceptor = TlsAcceptor::from(ca.get_server_config(&host.split(':').next().unwrap_or(&host))?);
     let stream = acceptor.accept(upgraded).await.context("TLS Handshake hatası")?;
 
     let service = service_fn(move |mut req: Request<Body>| {

@@ -2,7 +2,7 @@ use crate::cache::{CacheManager, CacheStats};
 use crate::certs::CertificateAuthority;
 use crate::config;
 use futures_util::{SinkExt, StreamExt};
-use http::{Response as HttpResponse, StatusCode}; // DÜZELTİLDİ
+use http::{Response as HttpResponse, StatusCode};
 use serde::Serialize;
 use std::convert::Infallible;
 use std::sync::Arc;

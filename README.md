@@ -5,12 +5,42 @@ VeloCache, hız, güvenlik ve verimlilik odaklı modern bir HTTP/HTTPS cache pro
 ## ✨ Temel Özellikler
 
 - **Tek Binary:** Kolay dağıtım ve yönetim için tek bir çalıştırılabilir dosya.
-- **HTTPS Desteği:** `CONNECT` tünelleme ile tam HTTPS uyumluluğu.
+- **Tam HTTPS Desteği:** Dinamik sertifika üretimi ile tam HTTPS trafiği önbelleğe alma (interception).
 - **Yapılandırılabilir Cache:** Hem bellek (LRU) hem de disk tabanlı kalıcı cache desteği.
-- **Gerçek Zamanlı Yönetim:** Dahili web arayüzü ile anlık istatistikler ve kontrol.
+- **Gelişmiş Yönetim Arayüzü:** Dahili web arayüzü ile anlık istatistikler, canlı log akışı ve detaylı cache kontrolü.
+- **Platforma Özel Betikler:** Windows ve Linux için otomatik kurulum ve yönetim betikleri.
 - **Yapılandırılmış Loglama:** `tracing` ile esnek ve detaylı loglama.
 
-## 📦 Kurulum
+---
+
+## 🏛️ Proje Mimarisi ve Teknik Detaylar
+
+Projenin ne yaptığını, hangi özellikleri kapsadığını ve nasıl çalıştığını anlamak için aşağıdaki dökümanları inceleyebilirsiniz:
+
+- **[Teknik Şartname (SPECIFICATION.md)](./SPECIFICATION.md):** Projenin hedefleri, özellikleri, fonksiyonel gereksinimleri ve API tanımları.
+- **[Sistem Mimarisi (ARCHITECTURE.md)](./ARCHITECTURE.md):** Projenin iç yapısı, bileşenlerin çalışması, veri akışları ve temel tasarım kararları.
+
+---
+
+## ⚠️ Önemli Kurulum Adımı: HTTPS Desteği ve Sertifika Kurulumu
+
+VeloCache'in HTTPS trafiğini (örneğin, `https://google.com`) önbelleğe alabilmesi için, trafiği deşifre etmesi gerekir. Bu işlem için VeloCache, bir "Kök Güven Sertifikası" (Root CA) kullanır. Bu sertifikayı bilgisayarınıza **sadece bir kereliğine** yüklemeniz gerekmektedir.
+
+1.  VeloCache sunucusunu `start.bat` veya `start.sh` ile başlatın.
+2.  Tarayıcınızdan yönetim arayüzüne gidin: **`http://127.0.0.1:8080`**
+3.  Arayüzdeki **"Güven Sertifikasını İndir (.crt)"** butonuna tıklayarak `VeloCache_CA.crt` dosyasını indirin.
+4.  İndirdiğiniz dosyaya çift tıklayın ve açılan pencerede şu adımları izleyin:
+    *   "Sertifika Yükle..." butonuna tıklayın.
+    *   Depolama Konumu olarak **"Yerel Makine"** seçeneğini seçin ve "İleri" deyin.
+    *   **"Tüm sertifikaları aşağıdaki depolama alanına yerleştir"** seçeneğini işaretleyin.
+    *   "Gözat..." butonuna tıklayın ve listeden **"Güvenilen Kök Sertifika Yetkilileri"** klasörünü seçip "Tamam" deyin.
+    *   "İleri" ve ardından "Son" butonuna basarak kurulumu tamamlayın.
+
+Bu işlemden sonra tarayıcınız VeloCache üzerinden geçen HTTPS sitelerine güvecektir.
+
+---
+
+## 📦 Kurulum ve Derleme
 
 1.  **Rust Kurulumu:**
     ```bash
@@ -29,73 +59,36 @@ Proje, hem Windows'ta geliştirme yapmayı kolaylaştıran hem de Linux sunucula
 
 ### 🖥️ Windows'ta Geliştirme Ortamı
 
-Windows'ta geliştirme yaparken, proxy ayarlarınızı ve güvenlik duvarı kurallarınızı otomatik olarak yöneten `start.bat` ve `stop.bat` betiklerini kullanabilirsiniz.
-
 1.  **Yapılandırma:** `config.toml` dosyasını ihtiyaçlarınıza göre düzenleyin.
-2.  **Proxy'yi Başlat:** `start.bat` dosyasına sağ tıklayın ve **"Yönetici olarak çalıştır"** seçeneğini seçin. Bu betik:
-    *   Gerekli güvenlik duvarı kuralını ekler.
-    *   Windows sistem proxy ayarlarını etkinleştirir.
-    *   VeloCache sunucusunu yeni bir pencerede başlatır.
-3.  **Proxy'yi Durdur:** `stop.bat` dosyasına çift tıklayarak çalıştırın. Bu betik:
-    *   VeloCache sunucusunu kapatır.
-    *   Windows sistem proxy ayarlarını eski haline getirir.
+2.  **Proxy'yi Başlat:** `start.bat` dosyasına sağ tıklayın ve **"Yönetici olarak çalıştır"** seçeneğini seçin. Bu betik; güvenlik duvarı kuralı ekler, sistem proxy ayarlarını yapar ve sunucuyu başlatır.
+3.  **Proxy'yi Durdur:** `stop.bat` dosyasına çift tıklayarak çalıştırın. Bu betik; sunucuyu kapatır ve proxy ayarlarını geri alır.
 
 ### 🐧 Linux'ta Sunucu Olarak Çalıştırma
 
-Linux sunucularında VeloCache'i arka planda (daemon olarak) yönetmek için `start.sh` ve `stop.sh` betiklerini kullanın.
-
-1.  **Yapılandırma:** `config.toml` dosyasını sunucu ortamına göre düzenleyin. Özellikle `bind_address` ayarını `0.0.0.0` olarak ayarladığınızdan emin olun.
+1.  **Yapılandırma:** `config.toml` dosyasını sunucu ortamına göre düzenleyin (`bind_address = "0.0.0.0"`).
 2.  **Betikleri Çalıştırılabilir Yapma:**
     ```bash
     chmod +x start.sh stop.sh
     ```
-3.  **Proxy'yi Başlat:**
-    ```bash
-    ./start.sh
-    ```
-    Bu komut, sunucuyu arka planda başlatır ve logları `velocache.log` dosyasına yazar.
-4.  **Proxy'yi Durdur:**
-    ```bash
-    ./stop.sh
-    ```
-    Bu komut, arka planda çalışan sunucu işlemini güvenli bir şekilde sonlandırır.
+3.  **Proxy'yi Başlat:** `./start.sh` (Arka planda başlatır)
+4.  **Proxy'yi Durdur:** `./stop.sh`
 
-### 🌐 Yönetim Arayüzü
+---
 
-Sunucu çalışırken, proxy istatistiklerini görmek ve cache'i yönetmek için tarayıcınızdan aşağıdaki adrese gidin:
+## 🌐 Yönetim Arayüzü
+
+Sunucu çalışırken, proxy'yi yönetmek için tarayıcınızdan aşağıdaki adrese gidin:
 **`http://127.0.0.1:8080`**
 
-## CLI Komutları
-
-Betikleri kullanmanın yanı sıra, `velocache` uygulamasını doğrudan da çalıştırabilirsiniz:
-
-- **Sunucuyu Başlat (Ön Planda):** `velocache run`
-- **Durumu Kontrol Et:** `velocache status`
-- **Sunucuyu Durdur:** `velocache stop`
+Arayüz üzerinden yapabilecekleriniz:
+-   **Anlık İstatistikler:** Hit oranı, toplam istek sayısı, cache boyutu ve cache'den sağlanan veri kazancı gibi metrikleri izleyin.
+-   **Canlı Log Akışı:** Sunucuda gerçekleşen olayları gerçek zamanlı olarak takip edin.
+-   **Cache Yönetimi:** Önbelleğe alınmış tüm girdileri (URL, boyut, tarih vb.) listeleyin ve istediğiniz girdiyi tek tıkla silin.
+-   **Sertifika İndirme:** HTTPS desteği için gereken Kök Sertifikayı indirin.
 
 ---
 ## 👥 Uzak Kullanıcılar İçin Proxy Kullanımı
 
-Bu proxy sunucusunu başka makinelerden kullanmak için, `client-scripts` klasöründeki betikleri kullanabilirsiniz.
+Bu proxy sunucusunu başka makinelerden kullanmak için `connect-proxy.bat` ve `connect-proxy.sh` betiklerini kullanabilirsiniz.
 
 **Önemli:** Betikleri kullanmadan önce, içlerindeki `PROXY_IP` değişkenini VeloCache sunucusunun çalıştığı makinenin IP adresi ile değiştirmeniz gerekmektedir.
-
-### Windows İstemcileri İçin
-
-1.  `client-scripts/connect-proxy.bat` dosyasını çalıştırarak sistem proxy ayarlarınızı etkinleştirin.
-2.  İşiniz bittiğinde, `client-scripts/disconnect-proxy.bat` dosyasını çalıştırarak ayarları geri alın.
-
-### Linux/macOS İstemcileri İçin
-
-Linux ve macOS'ta proxy ayarları genellikle mevcut terminal oturumu için ayarlanır.
-
-1.  Proxy'yi etkinleştirmek için betiği `source` komutu ile çalıştırın:
-    ```bash
-    source connect-proxy.sh
-    ```
-2.  Proxy'yi devre dışı bırakmak için, aynı terminalde aşağıdaki komutu çalıştırın:
-    ```bash
-    disconnect-proxy
-    ```
-    (Bu komut, `connect-proxy.sh` tarafından otomatik olarak oluşturulur.)
-    Alternatif olarak, yeni bir terminal açarak da proxy'siz bir oturum başlatabilirsiniz.
