@@ -19,3 +19,11 @@ echo "   Kapatmak icin 'disconnect-proxy' komutunu kullanin veya yeni bir termin
 
 # Kolaylik olmasi icin bir alias tanimlayalim
 alias disconnect-proxy="unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY; unalias disconnect-proxy; echo '🗑️ VeloCache proxy devre disi birakildi.'"
+
+echo 'Acquire::http::Proxy "http://127.0.0.1:3128";' | sudo tee /etc/apt/apt.conf.d/99proxy
+echo 'Acquire::https::Proxy "http://127.0.0.1:3128";' | sudo tee -a /etc/apt/apt.conf.d/99proxy
+
+# /mnt/c/ -> Windows C: sürücüsüne karşılık gelir
+sudo cp /mnt/c/sentiric/sentiric-velocity/certs/ca.crt /usr/local/share/ca-certificates/velocache.crt
+
+sudo update-ca-certificates

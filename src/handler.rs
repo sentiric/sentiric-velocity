@@ -53,6 +53,9 @@ lazy_static! {
         reqwest::Client::builder()
             .dns_resolver(Arc::new(resolver))
             .no_proxy()
+            // İYİLEŞTİRME: Maksimum uyumluluk için giden isteklerde sadece HTTP/1.1 kullan.
+            // Bu, Google gibi katı HTTP/2 sunucularındaki "protocol error" hatalarını çözer.
+            .http1_only()
             .build()
             .expect("Failed to build reqwest client")
     };
@@ -100,7 +103,6 @@ async fn forward_request(
 
     let mut headers = req.headers().clone();
     headers.remove(header::CONNECTION);
-    // DÜZELTME: header::KEEP_ALIVE sabiti yerine string kullanıldı.
     headers.remove("keep-alive");
     headers.remove(header::PROXY_AUTHENTICATE);
     headers.remove(header::PROXY_AUTHORIZATION);
