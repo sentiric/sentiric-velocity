@@ -6,7 +6,7 @@ use hyper::client::connect::dns::Name;
 use hyper::{header, Body, HeaderMap, Method, Request, Response, StatusCode};
 use lazy_static::lazy_static;
 use reqwest::dns::Resolve;
-use reqwest::Client;
+use reqwest::{redirect, Client}; // DÜZELTME: `redirect` modülü import edildi
 use std::error::Error as StdError;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -53,9 +53,9 @@ lazy_static! {
         reqwest::Client::builder()
             .dns_resolver(Arc::new(resolver))
             .no_proxy()
-            // İYİLEŞTİRME: Maksimum uyumluluk için giden isteklerde sadece HTTP/1.1 kullan.
-            // Bu, Google gibi katı HTTP/2 sunucularındaki "protocol error" hatalarını çözer.
             .http1_only()
+            // NİHAİ DÜZELTME: Yönlendirmeleri otomatik takip etme. Proxy'nin kendisi değil, tarayıcı yönlendirmeyi takip etmeli.
+            .redirect(redirect::Policy::none())
             .build()
             .expect("Failed to build reqwest client")
     };
