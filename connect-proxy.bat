@@ -3,7 +3,7 @@ chcp 65001 >nul
 title Proxy Etkinlestirici
 
 :: !!! BU BÖLÜMÜ KENDİ SUNUCU BİLGİLERİNİZLE DEĞİŞTİRİN !!!
-set PROXY_IP=192.168.1.2
+set PROXY_IP=127.0.0.1
 set PROXY_PORT=3128
 :: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

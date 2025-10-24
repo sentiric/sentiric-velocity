@@ -91,7 +91,7 @@ Linux ve macOS'ta proxy ayarları genellikle mevcut terminal oturumu için ayarl
 
 1.  Proxy'yi etkinleştirmek için betiği `source` komutu ile çalıştırın:
     ```bash
-    source client-scripts/connect-proxy.sh
+    source connect-proxy.sh
     ```
 2.  Proxy'yi devre dışı bırakmak için, aynı terminalde aşağıdaki komutu çalıştırın:
     ```bash

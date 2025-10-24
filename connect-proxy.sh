@@ -3,7 +3,7 @@
 # Ornek: source ./connect-proxy.sh
 
 # !!! BU BÖLÜMÜ KENDİ SUNUCU BİLGİLERİNİZLE DEĞİŞTİRİN !!!
-PROXY_IP="192.168.1.2"
+PROXY_IP="127.0.0.1"
 PROXY_PORT="3128"
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
