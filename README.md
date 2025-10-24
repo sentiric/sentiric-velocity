@@ -1,26 +1,44 @@
-# 🚀 VeloCache - Rust ile Güçlendirilmiş Yüksek Performanslı Cache Proxy
+# 🚀 VeloCache Pro - Birleşik Hızlandırma & Zeka Katmanı
 
-VeloCache, hız, güvenlik ve verimlilik odaklı modern bir HTTP/HTTPS cache proxy sunucusudur. Geliştirme ve dağıtım için platforma özel betiklerle birlikte gelir.
+VeloCache, sadece bir HTTP/S cache proxy'si değil; geliştiriciler ve sistemler için tasarlanmış, ağ trafiğini akıllıca yöneten, hızlandıran ve gözlemleyen **evrensel bir ağ beynidir**. Amacı, geliştirme döngülerini kısaltmak, tekrarlayan indirmeleri ortadan kaldırmak ve karmaşık sistemlerdeki ağ etkileşimlerini şeffaf bir şekilde optimize etmektir.
+
+"Bir kere kur ve unut" felsefesiyle, VeloCache makineniz ile internet arasına yerleşerek size daha hızlı ve verimli bir çalışma ortamı sunar.
 
 ## ✨ Temel Özellikler
 
-- **Tek Binary:** Kolay dağıtım ve yönetim için tek bir çalıştırılabilir dosya.
-- **Tam HTTPS Desteği:** Dinamik sertifika üretimi ile tam HTTPS trafiği önbelleğe alma (interception).
-- **Yapılandırılabilir Cache:** Hem bellek (LRU) hem de disk tabanlı kalıcı cache desteği.
-- **Gelişmiş Yönetim Arayüzü:** Dahili web arayüzü ile anlık istatistikler, canlı log akışı ve detaylı cache kontrolü.
-- **Platforma Özel Betikler:** Windows ve Linux için otomatik kurulum ve yönetim betikleri.
-- **Yapılandırılmış Loglama:** `tracing` ile esnek ve detaylı loglama.
+VeloCache, modern geliştirme ve altyapı ihtiyaçlarına cevap vermek için devrim yaratacak bir dizi özellik sunar:
+
+- **Evrensel Protokol Desteği:**
+  - **Gelişmiş HTTP/S Proxy:** HTTP/1.1, HTTP/2 ve gRPC trafiği için tam MitM (Man-in-the-Middle) önbellekleme.
+  - **Şeffaf DNS Proxy:** Tüm DNS sorgularını yerel olarak önbelleğe alarak her ağ isteğini milisaniyelerce hızlandırma.
+  - **SIP & RTP Gözlemlenebilirliği:** VoIP ve telekomünikasyon sistemlerindeki sinyal ve medya akışlarını izleme ve hata ayıklama yeteneği.
+
+- **Akıllı ve Güçlü Önbellekleme:**
+  - **Kural Tabanlı Yönetim:** Hangi içeriğin, ne zaman ve nasıl önbelleğe alınacağını (`rules.toml` ile) tam olarak siz kontrol edin.
+  - **Devasa Dosya Desteği:** Akış tabanlı disk yazma (Streaming to Disk) ile onlarca GB boyutundaki Docker imajlarını, AI modellerini veya videoları bile RAM'inizi doldurmadan önbelleğe alın.
+  - **Proaktif Doldurma (Cache Warming):** Sık kullandığınız araçları ve imajları siz istemeden önce önbelleğe alarak ortam kurulum sürelerini sıfıra indirin.
+
+- **Zahmetsiz Kullanıcı Deneyimi:**
+  - **VeloCache Companion:** Sistem tepsisinde çalışan yardımcı uygulama ile tek tıkla sertifika kurun, proxy ve DNS ayarlarınızı yönetin.
+  - **Modern Yönetim Paneli:** Gerçek zamanlı ağ akışını izleyin, önbelleği yönetin ve istatistikleri canlı grafiklerle görün.
+  - **Kapsamlı CLI:** Tüm yönetim işlevlerini otomasyon ve script'lerinizde kullanın.
+
+- **Profesyonel ve Genişletilebilir:**
+  - **Tek Binary Dağıtım:** Kolay kurulum ve yönetim.
+  - **Platforma Özel Kurulumcular:** MSI, DEB, RPM ve Homebrew ile zahmetsiz kurulum.
+  - **Eklenti Mimarisi (Gelecek):** WASM tabanlı eklentilerle VeloCache'e yeni yetenekler kazandırın.
 
 ---
 
 ## 🏛️ Proje Mimarisi ve Teknik Detaylar
 
-Projenin ne yaptığını, hangi özellikleri kapsadığını ve nasıl çalıştığını anlamak için aşağıdaki dökümanları inceleyebilirsiniz:
+Projenin vizyonunu, hedeflerini ve teknik altyapısını anlamak için aşağıdaki dokümanları inceleyebilirsiniz:
 
-- **[Teknik Şartname (SPECIFICATION.md)](./SPECIFICATION.md):** Projenin hedefleri, özellikleri, fonksiyonel gereksinimleri ve API tanımları.
-- **[Sistem Mimarisi (ARCHITECTURE.md)](./ARCHITECTURE.md):** Projenin iç yapısı, bileşenlerin çalışması, veri akışları ve temel tasarım kararları.
+- **[Teknik Şartname v2.0](./docs/SPECIFICATION_V2.md):** Projenin hedefleri, tüm özellikleri, fonksiyonel gereksinimleri ve API tanımları.
+- **[Sistem Mimarisi v2.0](./docs/ARCHITECTURE_v2.md):** Projenin iç yapısı, bileşenlerin çalışması, veri akışları ve temel tasarım kararları.
 
 ---
+
 
 ## ⚠️ Önemli Kurulum Adımı: HTTPS Desteği ve Sertifika Kurulumu
 
