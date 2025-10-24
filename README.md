@@ -1,6 +1,6 @@
 # 🚀 VeloCache - Rust ile Güçlendirilmiş Yüksek Performanslı Cache Proxy
 
-VeloCache, hız, güvenlik ve verimlilik odaklı modern bir HTTP/HTTPS cache proxy sunucusudur.
+VeloCache, hız, güvenlik ve verimlilik odaklı modern bir HTTP/HTTPS cache proxy sunucusudur. Geliştirme ve dağıtım için platforma özel betiklerle birlikte gelir.
 
 ## ✨ Temel Özellikler
 
@@ -9,7 +9,6 @@ VeloCache, hız, güvenlik ve verimlilik odaklı modern bir HTTP/HTTPS cache pro
 - **Yapılandırılabilir Cache:** Hem bellek (LRU) hem de disk tabanlı kalıcı cache desteği.
 - **Gerçek Zamanlı Yönetim:** Dahili web arayüzü ile anlık istatistikler ve kontrol.
 - **Yapılandırılmış Loglama:** `tracing` ile esnek ve detaylı loglama.
-- **Whitelist Desteği:** Sadece izin verilen alan adlarına erişim.
 
 ## 📦 Kurulum
 
@@ -19,56 +18,57 @@ VeloCache, hız, güvenlik ve verimlilik odaklı modern bir HTTP/HTTPS cache pro
     ```
 
 2.  **Projeyi Derleme:**
+    Projenin release versiyonunu derlemek için aşağıdaki komutu çalıştırın. Bu komut, `target/release/` dizininde platformunuza uygun bir çalıştırılabilir dosya (`velocache.exe` veya `velocache`) oluşturacaktır.
     ```bash
     cargo build --release
     ```
-    Derleme sonrası `target/release/` altında `velocache.exe` (Windows) veya `velocache` (Linux/macOS) dosyası oluşacaktır.
 
 ## 🚀 Kullanım
 
+Proje, hem Windows'ta geliştirme yapmayı kolaylaştıran hem de Linux sunucularında dağıtımı sağlayan betikler içerir.
+
+### 🖥️ Windows'ta Geliştirme Ortamı
+
+Windows'ta geliştirme yaparken, proxy ayarlarınızı ve güvenlik duvarı kurallarınızı otomatik olarak yöneten `start.bat` ve `stop.bat` betiklerini kullanabilirsiniz.
+
 1.  **Yapılandırma:** `config.toml` dosyasını ihtiyaçlarınıza göre düzenleyin.
-2.  **Proxy'yi Başlatma:**
+2.  **Proxy'yi Başlat:** `start.bat` dosyasına sağ tıklayın ve **"Yönetici olarak çalıştır"** seçeneğini seçin. Bu betik:
+    *   Gerekli güvenlik duvarı kuralını ekler.
+    *   Windows sistem proxy ayarlarını etkinleştirir.
+    *   VeloCache sunucusunu yeni bir pencerede başlatır.
+3.  **Proxy'yi Durdur:** `stop.bat` dosyasına çift tıklayarak çalıştırın. Bu betik:
+    *   VeloCache sunucusunu kapatır.
+    *   Windows sistem proxy ayarlarını eski haline getirir.
+
+### 🐧 Linux'ta Sunucu Olarak Çalıştırma
+
+Linux sunucularında VeloCache'i arka planda (daemon olarak) yönetmek için `start.sh` ve `stop.sh` betiklerini kullanın.
+
+1.  **Yapılandırma:** `config.toml` dosyasını sunucu ortamına göre düzenleyin. Özellikle `bind_address` ayarını `0.0.0.0` olarak ayarladığınızdan emin olun.
+2.  **Betikleri Çalıştırılabilir Yapma:**
     ```bash
-    ./target/release/velocache run
+    chmod +x start.sh stop.sh
     ```
-3.  **Web Arayüzü:**
-    Tarayıcınızdan `http://127.0.0.1:8080` adresine gidin.
+3.  **Proxy'yi Başlat:**
+    ```bash
+    ./start.sh
+    ```
+    Bu komut, sunucuyu arka planda başlatır ve logları `velocache.log` dosyasına yazar.
+4.  **Proxy'yi Durdur:**
+    ```bash
+    ./stop.sh
+    ```
+    Bu komut, arka planda çalışan sunucu işlemini güvenli bir şekilde sonlandırır.
+
+### 🌐 Yönetim Arayüzü
+
+Sunucu çalışırken, proxy istatistiklerini görmek ve cache'i yönetmek için tarayıcınızdan aşağıdaki adrese gidin:
+**`http://127.0.0.1:8080`**
 
 ## CLI Komutları
 
-- **Sunucuyu Başlat:** `velocache run`
+Betikleri kullanmanın yanı sıra, `velocache` uygulamasını doğrudan da çalıştırabilirsiniz:
+
+- **Sunucuyu Başlat (Ön Planda):** `velocache run`
 - **Durumu Kontrol Et:** `velocache status`
 - **Sunucuyu Durdur:** `velocache stop`
-
----
-
-## 🐧 WSL Entegrasyonu
-
-VeloCache, WSL (Windows Subsystem for Linux) içindeki `apt`, `wget`, `curl` gibi komutların trafiğini de cache'leyebilir. Entegrasyon için aşağıdaki **tek seferlik kurulumu** yapmanız yeterlidir.
-
-### Tek Seferlik WSL Kurulumu
-
-1.  Proje klasörünüzde bir WSL terminali açın. (`/mnt/c/sentiric/sentiric-velocity` gibi)
-2.  `dos2unix` aracının yüklü olduğundan emin olun. Değilse, yükleyin:
-    ```bash
-    sudo apt update && sudo apt install dos2unix
-    ```
-3.  Proje ile gelen `.sh` betiklerini çalıştırılabilir yapın ve kurulumu başlatın:
-    ```bash
-    dos2unix *.sh
-    chmod +x *.sh
-    ./setup-wsl.sh
-    ```
-4.  Kurulum betiği `~/.bashrc` veya `~/.zshrc` dosyanıza gerekli kısayolları ekleyecektir. Değişikliklerin aktif olması için terminalinizi yeniden başlatın veya şu komutu çalıştırın:
-    ```bash
-    source ~/.bashrc  # veya 'source ~/.zshrc'
-    ```
-
-### WSL'de Proxy Kullanımı
-
-Kurulumu tamamladıktan sonra, WSL terminalinizde proxy'yi anında yönetmek için şu basit komutları kullanabilirsiniz:
-
--   **Proxy'yi Etkinleştir:** `proxy-on`
--   **Proxy'yi Devre Dışı Bırak:** `proxy-off`
-
-**Önemli:** Bu komutların çalışması için Windows tarafında `start-proxy.bat` ile VeloCache sunucusunun çalışıyor olması gerekir.
