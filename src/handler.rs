@@ -1,18 +1,17 @@
 use crate::cache::CacheManager;
 use crate::config;
 use anyhow::Result;
-use hyper::{Body, Client, Method, Request, Response, StatusCode, Uri};
+use hyper::{Body, Client, Method, Request, Response, StatusCode, Uri, header}; // header import'u eklendi
 use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::io;
-use tracing::warn; // Düzeltildi
+use tracing::warn;
 
-// İmza güncellendi: cache parametresi eklendi
+// Bu fonksiyon değişmedi
 pub async fn proxy_handler(
     req: Request<Body>,
     cache: Arc<CacheManager>,
 ) -> Result<Response<Body>, Infallible> {
-    // Whitelist kontrolü
     let host = req.uri().host().unwrap_or_default();
     let config = config::get();
     if !config.proxy.whitelist.is_empty() && !config.proxy.whitelist.iter().any(|domain| host.ends_with(domain)) {
@@ -24,7 +23,6 @@ pub async fn proxy_handler(
     }
 
     if Method::CONNECT == req.method() {
-        // HTTPS Tünelleme (Bu kısım aynı kalabilir, cache'lenmez)
         match handle_connect(req).await {
             Ok(res) => Ok(res),
             Err(e) => {
@@ -36,15 +34,12 @@ pub async fn proxy_handler(
             }
         }
     } else {
-        // HTTP İstekleri (Cache mantığı burada)
         let cache_key = req.uri().to_string();
 
-        // 1. Cache'i kontrol et
         if let Some(cached_data) = cache.get(&cache_key).await {
             return Ok(Response::new(Body::from(cached_data)));
         }
 
-        // 2. Cache'de yoksa, isteği yönlendir
         match forward_http_request(req, &cache, &cache_key).await {
             Ok(res) => Ok(res),
             Err(e) => {
@@ -58,27 +53,35 @@ pub async fn proxy_handler(
     }
 }
 
+// BU FONKSİYON GÜNCELLENDİ
 async fn forward_http_request(
-    req: Request<Body>,
+    mut req: Request<Body>, // mut olarak değiştirildi
     cache: &Arc<CacheManager>,
     cache_key: &str,
 ) -> Result<Response<Body>> {
+    let config = config::get();
+    
+    // Giden istekten Host başlığını temizle, hyper bunu otomatik ekler
+    req.headers_mut().remove(header::HOST);
+    // Kendi User-Agent başlığımızı ekle
+    req.headers_mut().insert(
+        header::USER_AGENT, 
+        header::HeaderValue::from_str(&config.proxy.user_agent)?
+    );
+
     let client = Client::new();
     let response = client.request(req).await?;
 
     if response.status() == StatusCode::OK {
         let body_bytes = hyper::body::to_bytes(response.into_body()).await?;
-        
-        // Başarılı cevabı cache'e kaydet
         cache.put(cache_key, body_bytes.to_vec()).await;
-
         Ok(Response::new(Body::from(body_bytes)))
     } else {
         Ok(response)
     }
 }
 
-
+// Bu fonksiyonlar değişmedi
 async fn handle_connect(req: Request<Body>) -> Result<Response<Body>> {
     if let Some(addr) = host_addr(req.uri()) {
         tokio::spawn(async move {
@@ -101,8 +104,6 @@ async fn handle_connect(req: Request<Body>) -> Result<Response<Body>> {
     }
 }
 
-
-// Helper fonksiyonlar (aynı kalır)
 fn host_addr(uri: &Uri) -> Option<String> {
     uri.authority().map(|auth| auth.to_string())
 }
