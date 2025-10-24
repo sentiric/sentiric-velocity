@@ -1,13 +1,14 @@
 #!/bin/bash
 # VeloCache için WSL tarafı kurulum betiği
 
-# Windows'taki VeloCache proje klasörünün yolunu bul
 # Bu betiğin, proje klasörü içinden çalıştırıldığını varsayıyoruz.
 if [ ! -f "Cargo.toml" ]; then
     echo "HATA: Lütfen bu betiği VeloCache proje klasörünün içinden çalıştırın."
     exit 1
 fi
-VELOCACHE_PATH=$(wslpath -a "$(pwd)")
+
+# Komutun çalıştırıldığı dizini al (zaten WSL formatında)
+VELOCACHE_PATH="$(pwd)"
 echo "Proje yolu bulundu: ${VELOCACHE_PATH}"
 
 # Hedef shell profil dosyasını belirle
