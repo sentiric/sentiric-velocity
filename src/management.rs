@@ -12,14 +12,11 @@ use tracing_subscriber::{layer::Context, Layer};
 use warp::ws::{Message, WebSocket};
 use warp::Filter;
 
-// --- WebSocket Loglama ---
 lazy_static::lazy_static! {
     static ref LOG_BROADCASTER: Sender<String> = broadcast::channel(100).0;
 }
-
 #[derive(Clone)]
 pub struct BroadcastLayer;
-
 impl<S> Layer<S> for BroadcastLayer
 where
     S: Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
@@ -35,11 +32,7 @@ where
         }
     }
 }
-
-struct StringVisitor<'a> {
-    string: &'a mut String,
-}
-
+struct StringVisitor<'a> { string: &'a mut String, }
 impl<'a> tracing::field::Visit for StringVisitor<'a> {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {
@@ -48,14 +41,11 @@ impl<'a> tracing::field::Visit for StringVisitor<'a> {
     }
 }
 
-// --- Warp Sunucusu ---
-
 #[derive(Serialize)]
 struct StatsResponse {
     status: String,
     stats: CacheStats,
 }
-
 #[derive(Debug)]
 struct CustomRejection(String);
 impl warp::reject::Reject for CustomRejection {}
@@ -81,11 +71,11 @@ pub async fn start_management_server(cache: Arc<CacheManager>, ca: Arc<Certifica
         .and(warp::post())
         .and(with_cache.clone())
         .and_then(clear_cache_handler);
-
+    
     let entries_route = api.and(warp::path("entries"))
         .and(warp::get())
         .and(with_cache.clone())
-        .and_then(get_entries_handler);
+        .and_then(get_entries_metadata_handler);
     
     let delete_entry_route = api.and(warp::path!("entries" / String))
         .and(warp::delete())
@@ -125,8 +115,8 @@ async fn clear_cache_handler(cache: Arc<CacheManager>) -> Result<impl warp::Repl
     Ok(warp::reply::with_status("Cache başarıyla temizlendi.", StatusCode::OK))
 }
 
-async fn get_entries_handler(cache: Arc<CacheManager>) -> Result<impl warp::Reply, warp::Rejection> {
-    match cache.get_all_entries().await {
+async fn get_entries_metadata_handler(cache: Arc<CacheManager>) -> Result<impl warp::Reply, warp::Rejection> {
+    match cache.get_all_entries_metadata().await {
         Ok(entries) => Ok(warp::reply::json(&entries)),
         Err(e) => {
             warn!("Cache girdileri alınamadı: {}", e);

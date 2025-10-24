@@ -14,14 +14,32 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
 
-// GÜNCELLENDİ: Başlıkları saklamak için 'headers' alanı eklendi.
+// Veri ve meta veriyi ayırmak için diskteki format
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct CacheEntry {
-    pub data: Vec<u8>,
+pub struct CacheEntryDisk {
     #[serde(with = "http_serde::header_map")]
     pub headers: HeaderMap,
     pub created_at: DateTime<Utc>,
     pub url: String,
+}
+
+// Bellekte tutulacak tam yapı
+#[derive(Clone, Debug)]
+pub struct CacheEntry {
+    pub headers: HeaderMap,
+    pub created_at: DateTime<Utc>,
+    pub url: String,
+    pub data: Vec<u8>,
+}
+
+// UI için sadece meta verileri içeren yeni struct
+#[derive(Serialize, Clone, Debug)]
+pub struct CacheEntryMetadata {
+    #[serde(with = "http_serde::header_map")]
+    pub headers: HeaderMap,
+    pub created_at: DateTime<Utc>,
+    pub url: String,
+    pub size: u64,
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -36,7 +54,7 @@ pub struct CacheStats {
 }
 
 pub struct CacheManager {
-    memory_cache: Mutex<LruCache<String, CacheEntry>>,
+    memory_cache: Mutex<LruCache<String, Arc<CacheEntry>>>,
     disk_path: Option<PathBuf>,
     ttl: Duration,
     stats: Arc<CacheStatsInternal>,
@@ -73,7 +91,7 @@ impl CacheManager {
         };
 
         if let Some(path) = &cache.disk_path {
-            if let Ok(entries) = fs::read_dir(path) {
+             if let Ok(entries) = fs::read_dir(path) {
                 let mut count = 0;
                 let mut total_size = 0;
                 for entry in entries.flatten() {
@@ -92,8 +110,8 @@ impl CacheManager {
         Ok(cache)
     }
 
-    fn is_expired(&self, entry: &CacheEntry) -> bool {
-        (Utc::now() - entry.created_at).to_std().unwrap_or_default() > self.ttl
+    fn is_expired(&self, created_at: &DateTime<Utc>) -> bool {
+        (Utc::now() - *created_at).to_std().unwrap_or_default() > self.ttl
     }
 
     fn key_to_hash(&self, key: &str) -> String {
@@ -104,11 +122,11 @@ impl CacheManager {
         self.disk_path.as_ref().map(|p| p.join(self.key_to_hash(key)))
     }
 
-    pub async fn get(&self, key: &str) -> Option<CacheEntry> {
+    pub async fn get(&self, key: &str) -> Option<Arc<CacheEntry>> {
         self.stats.misses.fetch_add(1, Ordering::Relaxed);
         let mut mem_cache = self.memory_cache.lock().await;
         if let Some(entry) = mem_cache.get(key) {
-            if !self.is_expired(entry) {
+            if !self.is_expired(&entry.created_at) {
                 self.stats.hits.fetch_add(1, Ordering::Relaxed);
                 self.stats.misses.fetch_sub(1, Ordering::Relaxed);
                 self.stats.data_served_from_cache_bytes.fetch_add(entry.data.len() as u64, Ordering::Relaxed);
@@ -122,8 +140,14 @@ impl CacheManager {
 
         if let Some(path) = self.key_to_path(key) {
             if let Ok(file_content) = tokio::fs::read(&path).await {
-                if let Ok(entry) = bincode::deserialize::<CacheEntry>(&file_content) {
-                    if !self.is_expired(&entry) {
+                if let Ok((disk_entry, data)) = bincode::deserialize::<(CacheEntryDisk, Vec<u8>)>(&file_content) {
+                    if !self.is_expired(&disk_entry.created_at) {
+                        let entry = Arc::new(CacheEntry {
+                            headers: disk_entry.headers,
+                            created_at: disk_entry.created_at,
+                            url: disk_entry.url,
+                            data,
+                        });
                         self.stats.hits.fetch_add(1, Ordering::Relaxed);
                         self.stats.misses.fetch_sub(1, Ordering::Relaxed);
                         self.stats.data_served_from_cache_bytes.fetch_add(entry.data.len() as u64, Ordering::Relaxed);
@@ -140,18 +164,22 @@ impl CacheManager {
         debug!("CACHE MISS: {}", key);
         None
     }
-
-    // GÜNCELLENDİ: `headers` parametresi eklendi
+    
     pub async fn put(&self, key: &str, url: &str, data: Vec<u8>, headers: HeaderMap) {
-        let entry = CacheEntry {
+        let entry = Arc::new(CacheEntry {
             data,
             headers,
             created_at: Utc::now(),
             url: url.to_string(),
-        };
+        });
 
         if let Some(path) = self.key_to_path(key) {
-             if let Ok(encoded) = bincode::serialize(&entry) {
+            let disk_entry = CacheEntryDisk {
+                headers: entry.headers.clone(),
+                created_at: entry.created_at,
+                url: entry.url.clone(),
+            };
+            if let Ok(encoded) = bincode::serialize(&(&disk_entry, &entry.data)) {
                 let file_existed = path.exists();
                 let original_size = if file_existed { fs::metadata(&path).map(|m| m.len()).unwrap_or(0) } else { 0 };
 
@@ -161,11 +189,15 @@ impl CacheManager {
                         self.stats.disk_items.fetch_add(1, Ordering::Relaxed);
                     }
                     self.stats.total_disk_size_bytes.fetch_add(new_size, Ordering::Relaxed);
-                    self.stats.total_disk_size_bytes.fetch_sub(original_size, Ordering::Relaxed);
+                    if original_size > new_size {
+                        self.stats.total_disk_size_bytes.fetch_sub(original_size - new_size, Ordering::Relaxed);
+                    } else {
+                        self.stats.total_disk_size_bytes.fetch_add(new_size - original_size, Ordering::Relaxed);
+                    }
                 }
-             } else {
+            } else {
                 warn!("Failed to serialize cache entry for key: {}", key);
-             }
+            }
         }
         
         let mut mem_cache = self.memory_cache.lock().await;
@@ -175,8 +207,10 @@ impl CacheManager {
     pub async fn clear(&self) {
         self.memory_cache.lock().await.clear();
         if let Some(path) = &self.disk_path {
-            if let Err(e) = fs::remove_dir_all(path) {
-                warn!("Could not clear disk cache (might be empty): {}", e);
+             if path.exists() {
+                 if let Err(e) = fs::remove_dir_all(path) {
+                    warn!("Could not clear disk cache (might be busy): {}", e);
+                }
             }
             let _ = fs::create_dir_all(path);
         }
@@ -187,7 +221,7 @@ impl CacheManager {
         self.stats.data_served_from_cache_bytes.store(0, Ordering::Relaxed);
         info!("Cache cleared successfully.");
     }
-
+    
     pub async fn get_stats(&self) -> CacheStats {
         let hits = self.stats.hits.load(Ordering::Relaxed);
         let misses = self.stats.misses.load(Ordering::Relaxed);
@@ -202,7 +236,7 @@ impl CacheManager {
         }
     }
 
-    pub async fn get_all_entries(&self) -> Result<BTreeMap<String, CacheEntry>> {
+    pub async fn get_all_entries_metadata(&self) -> Result<BTreeMap<String, CacheEntryMetadata>> {
         let mut all_entries = BTreeMap::new();
         if let Some(path) = &self.disk_path {
             if !path.exists() { return Ok(all_entries); }
@@ -210,9 +244,13 @@ impl CacheManager {
             while let Some(entry) = read_dir.next_entry().await? {
                 if entry.metadata().await?.is_file() {
                     let file_content = tokio::fs::read(entry.path()).await?;
-                    if let Ok(decoded) = bincode::deserialize::<CacheEntry>(&file_content) {
-                        // GÜNCELLENDİ: Eskiden content_type'a göre hash alıyorduk, url'e göre olmalı
-                        all_entries.insert(self.key_to_hash(&decoded.url), decoded);
+                    if let Ok((disk_entry, data)) = bincode::deserialize::<(CacheEntryDisk, Vec<u8>)>(&file_content) {
+                        all_entries.insert(self.key_to_hash(&disk_entry.url), CacheEntryMetadata {
+                            headers: disk_entry.headers,
+                            created_at: disk_entry.created_at,
+                            url: disk_entry.url,
+                            size: data.len() as u64,
+                        });
                     }
                 }
             }

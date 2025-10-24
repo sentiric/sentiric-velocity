@@ -5,7 +5,7 @@ use futures_util::stream::StreamExt;
 use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
 use hyper::service::Service;
-use hyper::{header, Body, Client, HeaderMap, Method, Request, Response, StatusCode};
+use hyper::{header, Body, Client, Method, Request, Response, StatusCode};
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use lazy_static::lazy_static;
 use std::future::Future;
@@ -78,7 +78,7 @@ pub async fn proxy_handler(
         if let Some(cached_entry) = cache.get(&cache_key).await {
             let mut builder = Response::builder().status(StatusCode::OK);
             *builder.headers_mut().unwrap() = cached_entry.headers.clone();
-            return Ok(builder.body(Body::from(cached_entry.data)).unwrap());
+            return Ok(builder.body(Body::from(cached_entry.data.clone())).unwrap());
         }
     }
 
@@ -121,7 +121,7 @@ async fn forward_request(
 
     let status = response.status();
     let headers = response.headers().clone();
-
+    
     let (mut sender, client_body) = Body::channel();
 
     let should_cache = status == StatusCode::OK && method == Method::GET;
@@ -152,14 +152,8 @@ async fn forward_request(
         }
 
         if let Some(buffer) = body_buffer {
-            let mut headers_to_cache = HeaderMap::new();
-            for (key, value) in headers_clone_for_cache.iter() {
-                if key != header::CONNECTION && key != header::TRANSFER_ENCODING {
-                    headers_to_cache.insert(key.clone(), value.clone());
-                }
-            }
             cache
-                .put(&cache_key_owned, &uri_string, buffer, headers_to_cache)
+                .put(&cache_key_owned, &uri_string, buffer, headers_clone_for_cache)
                 .await;
         }
     });
