@@ -42,7 +42,7 @@ REM Önce eski dosyaları sil (varsa)
 if exist wsl-proxy.sh del wsl-proxy.sh
 if exist wsl-proxy-off.sh del wsl-proxy-off.sh
 
-REM wsl-proxy.sh dosyasını satır satır oluştur
+REM wsl-proxy.sh dosyasını satır satır oluştur (Windows satır sonlarıyla)
 echo #!/bin/bash > wsl-proxy.sh
 echo # Bu dosya VeloCache tarafından otomatik oluşturulmuştur. >> wsl-proxy.sh
 echo export HOST_IP=$(grep nameserver /etc/resolv.conf ^| sed 's/nameserver //') >> wsl-proxy.sh
@@ -53,7 +53,7 @@ echo export HTTPS_PROXY="$https_proxy" >> wsl-proxy.sh
 echo export NO_PROXY="localhost,127.0.0.1" >> wsl-proxy.sh
 echo echo "✅ VeloCache proxy WSL için etkinleştirildi. (Host: $HOST_IP)" >> wsl-proxy.sh
 
-REM wsl-proxy-off.sh dosyasını satır satır oluştur
+REM wsl-proxy-off.sh dosyasını satır satır oluştur (Windows satır sonlarıyla)
 echo #!/bin/bash > wsl-proxy-off.sh
 echo # Bu dosya VeloCache tarafından otomatik oluşturulmuştur. >> wsl-proxy-off.sh
 echo unset http_proxy >> wsl-proxy-off.sh
@@ -63,7 +63,10 @@ echo unset HTTPS_PROXY >> wsl-proxy-off.sh
 echo unset NO_PROXY >> wsl-proxy-off.sh
 echo echo "🗑️ VeloCache proxy WSL için devre dışı bırakıldı." >> wsl-proxy-off.sh
 
-echo ✅ WSL betikleri oluşturuldu.
+echo 🐧 Satır sonları Linux formatına dönüştürülüyor...
+wsl dos2unix wsl-proxy.sh >nul 2>&1
+wsl dos2unix wsl-proxy-off.sh >nul 2>&1
+echo ✅ WSL betikleri kullanıma hazır.
 
 echo.
 echo ✅ Sunucu yeni bir pencerede başlatılıyor...
