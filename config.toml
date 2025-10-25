@@ -17,3 +17,17 @@ level = "info" # debug, info, warn, error
 
 [certs]
 path = "./certs" # Sertifika dosyalarının saklanacağı dizin
+
+[rules]
+# Bu listedeki alan adlarına (veya alt alan adlarına) yapılan isteklerin yanıtları
+# önbelleğe ALINMAYACAKTIR. İstekler yine proxy üzerinden geçecek ve loglanacaktır.
+# Kimlik doğrulama, analitik veya sürekli değişen API'ler için idealdir.
+ignore_hosts = [
+    "auth.docker.io",
+    "login.live.com",
+    "accounts.google.com",
+    "app.posthog.com",
+    "api.github.com", # GraphQL ve diğer dinamik endpoint'ler için
+    "*.events.data.microsoft.com",
+    "*.google-analytics.com"
+]

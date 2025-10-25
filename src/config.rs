@@ -10,7 +10,18 @@ pub struct Settings {
     pub management: Management,
     pub log: Log,
     pub certs: Certs,
+    // YENİ: 'rules' bölümünü ekliyoruz. 'Option' kullanarak isteğe bağlı hale getiriyoruz.
+    #[serde(default)] // config.toml'da [rules] yoksa hata vermemesi için
+    pub rules: Rules,
 }
+
+#[derive(Debug, Deserialize, Clone, Default)] // 'Default' ekledik
+pub struct Rules {
+    // YENİ: 'ignore_hosts' listesi. 'Option' kullanarak isteğe bağlı hale getiriyoruz.
+    #[serde(default)] // [rules] altında ignore_hosts yoksa hata vermemesi için
+    pub ignore_hosts: Vec<String>,
+}
+
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Proxy {

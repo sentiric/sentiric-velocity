@@ -13,7 +13,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use tracing::{info, warn};
+use tracing::{info, warn, debug}; // 'debug' import edildi
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::TokioAsyncResolver;
 
@@ -54,18 +54,11 @@ lazy_static! {
         let mut http = HttpConnector::new_with_resolver(resolver);
         http.enforce_http(false);
 
-        // --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
-        
         let https = HttpsConnectorBuilder::new()
             .with_native_roots()
-            // Adım 1: Hem HTTPS hem de HTTP'yi etkinleştir. Bu, bir sonraki adıma geçmek için doğru türü döndürür.
             .https_or_http()
-            // Adım 2: Artık protokolleri (HTTP/1, HTTP/2) etkinleştirebiliriz.
             .enable_http1()
-            // Adım 3: Konektörü sarmala.
             .wrap_connector(http);
-
-        // --- DEĞİŞİKLİK BURADA BİTİYOR ---
 
         Client::builder().build(https)
     };
@@ -110,6 +103,9 @@ async fn forward_request(
     let config = config::get();
     let method = req.method().clone();
     let uri_string = req.uri().to_string();
+    
+    // YENİ: Host bilgisini klonlayarak daha sonra kullanmak üzere saklıyoruz.
+    let host = req.uri().host().map(|h| h.to_string());
 
     req.headers_mut().remove(header::CONNECTION);
     req.headers_mut().remove("keep-alive");
@@ -159,9 +155,29 @@ async fn forward_request(
         }
 
         if let Some(buffer) = body_buffer {
-            cache
-                .put(&cache_key_owned, &uri_string, buffer, headers_clone_for_cache)
-                .await;
+            // --- YENİ KURAL KONTROLÜ MANTIĞI ---
+            let should_ignore = if let Some(host) = host {
+                config.rules.ignore_hosts.iter().any(|ignore_pattern| {
+                    // Wildcard (*) desteği için basit kontrol
+                    if let Some(stripped) = ignore_pattern.strip_prefix("*.") {
+                        host.ends_with(stripped)
+                    } else {
+                        host == *ignore_pattern
+                    }
+                })
+            } else {
+                false // Host yoksa, görmezden gelme kuralı uygulanamaz
+            };
+
+            if !should_ignore {
+                debug!("CACHE PUT: {}", &cache_key_owned);
+                cache
+                    .put(&cache_key_owned, &uri_string, buffer, headers_clone_for_cache)
+                    .await;
+            } else {
+                debug!("CACHE IGNORED (rule): {}", &cache_key_owned);
+            }
+            // --- KONTROL SONU ---
         }
     });
 
