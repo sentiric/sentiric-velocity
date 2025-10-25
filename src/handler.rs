@@ -54,11 +54,18 @@ lazy_static! {
         let mut http = HttpConnector::new_with_resolver(resolver);
         http.enforce_http(false);
 
+        // --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
+        
         let https = HttpsConnectorBuilder::new()
             .with_native_roots()
-            .https_only()
+            // Adım 1: Hem HTTPS hem de HTTP'yi etkinleştir. Bu, bir sonraki adıma geçmek için doğru türü döndürür.
+            .https_or_http()
+            // Adım 2: Artık protokolleri (HTTP/1, HTTP/2) etkinleştirebiliriz.
             .enable_http1()
+            // Adım 3: Konektörü sarmala.
             .wrap_connector(http);
+
+        // --- DEĞİŞİKLİK BURADA BİTİYOR ---
 
         Client::builder().build(https)
     };
