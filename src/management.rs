@@ -1,4 +1,4 @@
-use crate::cache::{CacheManager, CacheStats};
+use crate::cache::{CacheManager, CacheStats, CacheEntryMetadata};
 use crate::certs::CertificateAuthority;
 use crate::config;
 use futures_util::{SinkExt, StreamExt};
@@ -41,11 +41,13 @@ impl<'a> tracing::field::Visit for StringVisitor<'a> {
     }
 }
 
+// YENİ: Tek bir API yanıtında hem istatistikleri hem de önbellek girdilerini birleştiren yapı.
 #[derive(Serialize)]
-struct StatsResponse {
-    status: String,
+struct DashboardResponse {
     stats: CacheStats,
+    entries: Vec<CacheEntryMetadata>,
 }
+
 #[derive(Debug)]
 struct CustomRejection(String);
 impl warp::reject::Reject for CustomRejection {}
@@ -63,19 +65,17 @@ pub async fn start_management_server(cache: Arc<CacheManager>, ca: Arc<Certifica
 
     let api = warp::path("api");
 
-    let stats_route = api.and(warp::path("stats"))
+    // YENİ: Birleşik dashboard endpoint'i
+    let dashboard_route = api.and(warp::path("dashboard"))
         .and(with_cache.clone())
-        .and_then(get_stats_handler);
+        .and_then(get_dashboard_handler);
 
     let clear_route = api.and(warp::path("clear"))
         .and(warp::post())
         .and(with_cache.clone())
         .and_then(clear_cache_handler);
     
-    let entries_route = api.and(warp::path("entries"))
-        .and(warp::get())
-        .and(with_cache.clone())
-        .and_then(get_entries_metadata_handler);
+    // ESKİ entries_route KALDIRILDI
     
     let delete_entry_route = api.and(warp::path!("entries" / String))
         .and(warp::delete())
@@ -91,9 +91,8 @@ pub async fn start_management_server(cache: Arc<CacheManager>, ca: Arc<Certifica
     });
 
     let routes = index_html
-        .or(stats_route)
+        .or(dashboard_route) // ESKİ stats_route ve entries_route yerine bu geldi
         .or(clear_route)
-        .or(entries_route)
         .or(delete_entry_route)
         .or(cert_route)
         .or(log_route)
@@ -103,10 +102,30 @@ pub async fn start_management_server(cache: Arc<CacheManager>, ca: Arc<Certifica
     warp::serve(routes).run(addr).await;
 }
 
-async fn get_stats_handler(cache: Arc<CacheManager>) -> Result<impl warp::Reply, warp::Rejection> {
+// YENİ: Birleşik dashboard handler'ı
+async fn get_dashboard_handler(cache: Arc<CacheManager>) -> Result<impl warp::Reply, warp::Rejection> {
+    // get_stats Future'ı bir Result döndürmediği için try_join'dan ayırıyoruz.
     let stats = cache.get_stats().await;
-    let response = StatsResponse { status: "Aktif".to_string(), stats };
-    Ok(warp::reply::json(&response))
+
+    // get_all_entries_metadata hata döndürebileceği için onu ayrı ele alıyoruz.
+    match cache.get_all_entries_metadata().await {
+        Ok(entries) => {
+            let response = DashboardResponse { stats, entries };
+            Ok(warp::reply::json(&response))
+        }
+        Err(e) => {
+            warn!("Dashboard girdileri alınamadı: {}", e);
+            // İstatistikleri yine de gönderebiliriz, UI'ın tamamen çökmemesi için.
+            // Bu, UI'ın daha dayanıklı olmasını sağlar.
+            let response = DashboardResponse { 
+                stats, 
+                entries: vec![] // Girdiler için boş bir liste gönder
+            };
+            Ok(warp::reply::json(&response))
+            // Veya hatayı bildirmek için:
+            // Err(warp::reject::custom(CustomRejection(e.to_string())))
+        }
+    }
 }
 
 async fn clear_cache_handler(cache: Arc<CacheManager>) -> Result<impl warp::Reply, warp::Rejection> {
@@ -115,15 +134,7 @@ async fn clear_cache_handler(cache: Arc<CacheManager>) -> Result<impl warp::Repl
     Ok(warp::reply::with_status("Cache başarıyla temizlendi.", StatusCode::OK))
 }
 
-async fn get_entries_metadata_handler(cache: Arc<CacheManager>) -> Result<impl warp::Reply, warp::Rejection> {
-    match cache.get_all_entries_metadata().await {
-        Ok(entries) => Ok(warp::reply::json(&entries)),
-        Err(e) => {
-            warn!("Cache girdileri alınamadı: {}", e);
-            Err(warp::reject::custom(CustomRejection(e.to_string())))
-        }
-    }
-}
+// ESKİ get_entries_metadata_handler KALDIRILDI
 
 async fn delete_entry_handler(key_hash: String, cache: Arc<CacheManager>) -> Result<impl warp::Reply, warp::Rejection> {
     match cache.delete_entry(&key_hash).await {

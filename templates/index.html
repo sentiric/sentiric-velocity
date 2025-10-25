@@ -131,13 +131,18 @@
             return `${diffDays} gün önce`;
         }
 
-        async function refreshStats() {
+        // --- BU FONKSİYON GÜNCELLENDİ ---
+        async function refreshDashboard() {
             try {
-                const response = await fetch('/api/stats');
-                if (!response.ok) throw new Error('API hatası');
+                const response = await fetch('/api/dashboard');
+                if (!response.ok) {
+                     document.getElementById('status').textContent = 'Hata';
+                    throw new Error('API hatası: ' + response.statusText);
+                }
                 const data = await response.json();
 
-                document.getElementById('status').textContent = data.status;
+                // İstatistikleri güncelle
+                document.getElementById('status').textContent = "Aktif";
                 document.getElementById('itemCount').textContent = data.stats.in_memory_items;
                 document.getElementById('cacheSize').textContent = formatBytes(data.stats.total_disk_size_bytes);
                 document.getElementById('dataSaved').textContent = formatBytes(data.stats.data_served_from_cache_bytes);
@@ -147,26 +152,17 @@
                 const total = data.stats.total_requests;
                 const hitRate = total > 0 ? (hits / total) * 100 : 0;
                 document.getElementById('hitRate').textContent = hitRate.toFixed(1) + '%';
-            } catch (error) {
-                document.getElementById('status').textContent = 'Hata';
-                console.error('İstatistikler alınamadı:', error);
-            }
-        }
-        
-        async function refreshEntries() {
-            try {
-                const response = await fetch('/api/entries');
-                if (!response.ok) throw new Error('API hatası');
-                const data = await response.json();
+
+                // Önbellek girdilerini güncelle
                 const tbody = document.querySelector('#cache-entries tbody');
                 tbody.innerHTML = '';
                 
-                if (Object.keys(data).length === 0) {
+                if (data.entries.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Cache boş.</td></tr>';
                     return;
                 }
 
-                for (const [hash, entry] of Object.entries(data)) {
+                for (const entry of data.entries) {
                     const row = document.createElement('tr');
                     const contentType = entry.headers['content-type'] || 'N/A';
                     row.innerHTML = `
@@ -174,23 +170,26 @@
                         <td>${contentType.split(';')[0]}</td>
                         <td>${formatBytes(entry.size)}</td>
                         <td>${formatAge(entry.created_at)}</td>
-                        <td><button class="btn btn-small" onclick="deleteEntry('${hash}')">Sil</button></td>
+                        <td><button class="btn btn-small" onclick="deleteEntry('${entry.hash}')">Sil</button></td>
                     `;
                     tbody.appendChild(row);
                 }
+
             } catch (error) {
-                console.error('Cache girdileri alınamadı:', error);
-                 document.querySelector('#cache-entries tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;">Girdiler yüklenemedi.</td></tr>';
+                console.error('Dashboard verileri alınamadı:', error);
+                document.getElementById('status').textContent = 'Hata';
+                document.querySelector('#cache-entries tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;">Girdiler yüklenemedi.</td></tr>';
             }
         }
+        
+        // ESKİ refreshStats ve refreshEntries fonksiyonları KALDIRILDI
 
         async function deleteEntry(hash) {
             if (!confirm('Bu cache girdisini silmek istediğinizden emin misiniz?')) return;
             try {
                 const response = await fetch(`/api/entries/${hash}`, { method: 'DELETE' });
                 if (!response.ok) throw new Error('Girdi silinemedi.');
-                refreshEntries();
-                refreshStats();
+                refreshDashboard(); // Sildikten sonra tüm paneli yenile
             } catch(error) {
                 alert('Hata: ' + error.message);
             }
@@ -202,8 +201,7 @@
                 const response = await fetch('/api/clear', { method: 'POST' });
                 if (!response.ok) throw new Error('Cache temizlenemedi.');
                 alert('Cache başarıyla temizlendi!');
-                refreshEntries();
-                refreshStats();
+                refreshDashboard(); // Temizledikten sonra tüm paneli yenile
             } catch (error) {
                 alert('Hata: ' + error.message);
             }
@@ -215,12 +213,8 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             connectWebSocket();
-            refreshStats();
-            refreshEntries();
-            setInterval(() => {
-                refreshStats();
-                refreshEntries();
-            }, 5000);
+            refreshDashboard();
+            setInterval(refreshDashboard, 5000); // Artık tek bir fonksiyonu çağırıyoruz
         });
     </script>
 </body>

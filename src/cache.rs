@@ -1,10 +1,11 @@
 use crate::config::Settings;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use http_serde;
 use hyper::HeaderMap;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+
 use std::fs;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -40,6 +41,8 @@ pub struct CacheEntryMetadata {
     pub created_at: DateTime<Utc>,
     pub url: String,
     pub size: u64,
+    // YENİ: UI'da silme işlemi için hash'i de gönderiyoruz.
+    pub hash: String,
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -142,6 +145,7 @@ impl CacheManager {
             if let Ok(file_content) = tokio::fs::read(&path).await {
                 if let Ok((disk_entry, data)) = bincode::deserialize::<(CacheEntryDisk, Vec<u8>)>(&file_content) {
                     if !self.is_expired(&disk_entry.created_at) {
+                        let entry_data_len = data.len() as u64;
                         let entry = Arc::new(CacheEntry {
                             headers: disk_entry.headers,
                             created_at: disk_entry.created_at,
@@ -150,7 +154,7 @@ impl CacheManager {
                         });
                         self.stats.hits.fetch_add(1, Ordering::Relaxed);
                         self.stats.misses.fetch_sub(1, Ordering::Relaxed);
-                        self.stats.data_served_from_cache_bytes.fetch_add(entry.data.len() as u64, Ordering::Relaxed);
+                        self.stats.data_served_from_cache_bytes.fetch_add(entry_data_len, Ordering::Relaxed);
                         debug!("CACHE HIT (disk): {}", key);
                         let mut mem_cache = self.memory_cache.lock().await;
                         mem_cache.put(key.to_string(), entry.clone());
@@ -188,12 +192,10 @@ impl CacheManager {
                     if !file_existed {
                         self.stats.disk_items.fetch_add(1, Ordering::Relaxed);
                     }
+                    // More accurate size calculation
                     self.stats.total_disk_size_bytes.fetch_add(new_size, Ordering::Relaxed);
-                    if original_size > new_size {
-                        self.stats.total_disk_size_bytes.fetch_sub(original_size - new_size, Ordering::Relaxed);
-                    } else {
-                        self.stats.total_disk_size_bytes.fetch_add(new_size - original_size, Ordering::Relaxed);
-                    }
+                    self.stats.total_disk_size_bytes.fetch_sub(original_size, Ordering::Relaxed);
+
                 }
             } else {
                 warn!("Failed to serialize cache entry for key: {}", key);
@@ -236,25 +238,43 @@ impl CacheManager {
         }
     }
 
-    pub async fn get_all_entries_metadata(&self) -> Result<BTreeMap<String, CacheEntryMetadata>> {
-        let mut all_entries = BTreeMap::new();
+    // --- BU FONKSİYON GÜNCELLENDİ ---
+    pub async fn get_all_entries_metadata(&self) -> Result<Vec<CacheEntryMetadata>> {
+        let mut all_entries = Vec::new();
         if let Some(path) = &self.disk_path {
             if !path.exists() { return Ok(all_entries); }
             let mut read_dir = tokio::fs::read_dir(path).await?;
             while let Some(entry) = read_dir.next_entry().await? {
                 if entry.metadata().await?.is_file() {
-                    let file_content = tokio::fs::read(entry.path()).await?;
-                    if let Ok((disk_entry, data)) = bincode::deserialize::<(CacheEntryDisk, Vec<u8>)>(&file_content) {
-                        all_entries.insert(self.key_to_hash(&disk_entry.url), CacheEntryMetadata {
-                            headers: disk_entry.headers,
-                            created_at: disk_entry.created_at,
-                            url: disk_entry.url,
-                            size: data.len() as u64,
-                        });
+                    let file_path = entry.path();
+                    if let Ok(file_content) = tokio::fs::read(&file_path).await {
+                        match bincode::deserialize::<(CacheEntryDisk, Vec<u8>)>(&file_content) {
+                            Ok((disk_entry, data)) => {
+                                let hash = file_path.file_name()
+                                    .and_then(|s| s.to_str())
+                                    .unwrap_or_default()
+                                    .to_string();
+
+                                all_entries.push(CacheEntryMetadata {
+                                    headers: disk_entry.headers,
+                                    created_at: disk_entry.created_at,
+                                    url: disk_entry.url,
+                                    size: data.len() as u64,
+                                    hash,
+                                });
+                            },
+                            Err(e) => {
+                                warn!("[Cache Listing] Failed to deserialize entry: {:?}, Error: {}", file_path, e);
+                            }
+                        }
+                    } else {
+                        warn!("[Cache Listing] Failed to read cache file: {:?}", file_path);
                     }
                 }
             }
         }
+        // Girdileri en yeniye göre sıralayarak UI'da daha kullanışlı bir görünüm sağlayalım.
+        all_entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
         Ok(all_entries)
     }
 
