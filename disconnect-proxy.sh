@@ -1,16 +1,9 @@
 #!/bin/bash
 # ==============================================================================
-# VeloCache Pro - WSL Bağlantı Kesme Betiği v2.1 (Hata Önleyici)
-#
-# BU BETİK 'SOURCE' KOMUTU İLE ÇALIŞTIRILMALIDIR!
-# Örnek: source ./disconnect-proxy.sh
-# VEYA 'connect-proxy.sh' tarafından oluşturulan 'disconnect-proxy' alias'ını kullanın.
+# VeloCache Pro - WSL Bağlantı Kesme Betiği v2.2 (Taşınabilir)
 # ==============================================================================
 
 # Betiğin 'source' ile mi yoksa doğrudan mı çalıştırıldığını kontrol et
-# BASH_SOURCE, betiğin yolunu verir. $0 ise çalıştırılan komutu.
-# Eğer source ile çalıştırılmazsa genellikle bunlar farklı olur.
-# Bu kontrol %100 kusursuz olmasa da çoğu senaryoda işe yarar.
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo "❌ HATA: Bu betik mevcut oturumunuzu değiştirmek için 'source' komutu ile çalıştırılmalıdır."
     echo "   Doğru kullanım: source ./disconnect-proxy.sh"

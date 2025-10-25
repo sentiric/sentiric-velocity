@@ -1,23 +1,27 @@
 #!/bin/bash
 # ====================================================================================
-# VeloCache Pro - WSL Bağlantı ve Kurulum Betiği v3.0 (Mirrored Mode Final)
+# VeloCache Pro - WSL Bağlantı ve Kurulum Betiği v3.1 (Taşınabilir Yol Düzeltmesi)
 #
-# Bu betik, modern WSL'in "Mirrored" ağ modunun özelliklerinden faydalanarak,
-# WSL ortamınızı Windows üzerinde çalışan VeloCache proxy'sine bağlar.
+# Bu betik, herhangi bir dizinden çalıştırıldığında dahi VeloCache proxy'sine
+# doğru bir şekilde bağlanmak için tasarlanmıştır.
 #
-# Kullanım: source ./connect-proxy.sh
+# Kullanım: source /tam/yol/ile/connect-proxy.sh
 # ====================================================================================
+
+# --- Betiğin kendi dizinini bulması için sihirli satır ---
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 # --- Ayarlar ---
 PROXY_PORT="3128"
-CERT_SOURCE_PATH="./certs/ca.crt"
+# Sertifika yolunu artık betiğin kendi konumuna göre belirliyoruz
+CERT_SOURCE_PATH="${SCRIPT_DIR}/certs/ca.crt"
+# Disconnect betiğinin yolunu da betiğin konumuna göre belirliyoruz
+DISCONNECT_SCRIPT_PATH="${SCRIPT_DIR}/disconnect-proxy.sh"
 
 # --- Betik Başlangıcı ---
 echo "🚀 VeloCache Pro WSL Bağlantı Asistanı başlatılıyor..."
 
 # Adım 1: Windows Ana Makinesinin IP Adresini Belirleme
-# Modern "Mirrored" ağ modunda, Windows localhost'u doğrudan WSL'in
-# localhost'una yansıtılır. Bu en basit ve en güvenilir yöntemdir.
 HOST_IP="127.0.0.1"
 
 echo "✅ WSL 'Mirrored' ağ modu algılandı. Proxy adresi olarak ${HOST_IP} kullanılacak."
@@ -34,7 +38,6 @@ echo "✅ Proxy ortam değişkenleri ayarlandı: ${http_proxy}"
 # Adım 3: apt Paket Yöneticisini Yapılandırma
 echo "🔧 apt paket yöneticisi yapılandırılıyor..."
 APT_CONF_FILE="/etc/apt/apt.conf.d/99velocache_proxy.conf"
-# sudo yetkisi gerektirecek, şifre istenebilir
 echo "Acquire::http::Proxy \"${http_proxy}\";" | sudo tee "$APT_CONF_FILE" > /dev/null
 echo "Acquire::https::Proxy \"${https_proxy}\";" | sudo tee -a "$APT_CONF_FILE" > /dev/null
 echo "✅ apt yapılandırması tamamlandı."
@@ -45,7 +48,7 @@ CERT_DEST_PATH="/usr/local/share/ca-certificates/velocache_pro_ca.crt"
 
 if [ ! -f "$CERT_SOURCE_PATH" ]; then
     echo "❌ HATA: Sertifika dosyası bulunamadı: ${CERT_SOURCE_PATH}"
-    echo "   Lütfen VeloCache'i en az bir kez çalıştırdığınızdan emin olun."
+    echo "   Lütfen VeloCache'i en az bir kez çalıştırdığınızdan ve betik yolunun doğru olduğundan emin olun."
     return 1
 fi
 
@@ -60,7 +63,8 @@ else
 fi
 
 # Adım 5: Kolay Çıkış İçin disconnect-proxy Alias'ı Tanımlama
-alias disconnect-proxy="source ./disconnect-proxy.sh"
+# Alias'ı da artık tam yol ile tanımlıyoruz ki her yerden çalışsın
+alias disconnect-proxy="source ${DISCONNECT_SCRIPT_PATH}"
 
 echo ""
 echo "===================================================================="
